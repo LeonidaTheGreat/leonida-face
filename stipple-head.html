@@ -223,6 +223,28 @@
             </div>
         </div>
         
+        <h3>Surface Animation</h3>
+        
+        <div class="slider-row">
+            <label>Surface Float Distance</label>
+            <input type="range" id="surfaceFloat" min="0" max="100" value="15">
+            <div class="range-inputs">
+                <input type="number" id="surfaceFloatMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="surfaceFloatMax" value="100">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Surface Float Speed</label>
+            <input type="range" id="surfaceSpeed" min="0" max="200" value="50">
+            <div class="range-inputs">
+                <input type="number" id="surfaceSpeedMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="surfaceSpeedMax" value="200">
+            </div>
+        </div>
+        
         <h3>Appearance</h3>
         
         <div class="slider-row">
@@ -323,6 +345,12 @@
             floatAway: 200,
             floatAwayMin: 0,
             floatAwayMax: 1000,
+            surfaceFloat: 15,
+            surfaceFloatMin: 0,
+            surfaceFloatMax: 100,
+            surfaceSpeed: 50,
+            surfaceSpeedMin: 0,
+            surfaceSpeedMax: 200,
             color: '#00ffff',
             glow: 150,
             glowMin: 0,
@@ -376,6 +404,18 @@
             document.getElementById('floatAway').max = settings.floatAwayMax;
             document.getElementById('floatAwayMin').value = settings.floatAwayMin;
             document.getElementById('floatAwayMax').value = settings.floatAwayMax;
+            
+            document.getElementById('surfaceFloat').value = settings.surfaceFloat;
+            document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
+            document.getElementById('surfaceFloat').max = settings.surfaceFloatMax;
+            document.getElementById('surfaceFloatMin').value = settings.surfaceFloatMin;
+            document.getElementById('surfaceFloatMax').value = settings.surfaceFloatMax;
+            
+            document.getElementById('surfaceSpeed').value = settings.surfaceSpeed;
+            document.getElementById('surfaceSpeed').min = settings.surfaceSpeedMin;
+            document.getElementById('surfaceSpeed').max = settings.surfaceSpeedMax;
+            document.getElementById('surfaceSpeedMin').value = settings.surfaceSpeedMin;
+            document.getElementById('surfaceSpeedMax').value = settings.surfaceSpeedMax;
             
             document.getElementById('color').value = settings.color;
             
@@ -537,7 +577,9 @@
                     floatAway: { value: settings.floatAway / 100 },
                     falloffCurve: { value: getFalloffCurveIndex() },
                     reference: { value: settings.reference === 'camera' ? 1 : 0 },
-                    cameraDir: { value: new THREE.Vector3(0, 0, -1) }
+                    cameraDir: { value: new THREE.Vector3(0, 0, -1) },
+                    surfaceFloat: { value: settings.surfaceFloat / 100 },
+                    surfaceSpeed: { value: settings.surfaceSpeed / 100 }
                 },
                 vertexShader: `
                     attribute float size;
@@ -552,6 +594,8 @@
                     uniform int falloffCurve;
                     uniform int reference;
                     uniform vec3 cameraDir;
+                    uniform float surfaceFloat;
+                    uniform float surfaceSpeed;
                     
                     varying float vAlpha;
                     
@@ -566,8 +610,28 @@
                     
                     void main() {
                         vec3 pos = basePosition;
-                        float depth;
                         
+                        // === Surface floating for ALL particles ===
+                        // Creates gentle movement while staying near the surface
+                        float t1 = time * surfaceSpeed + seeds.x;
+                        float t2 = time * surfaceSpeed * 0.7 + seeds.y;
+                        float t3 = time * surfaceSpeed * 0.5 + seeds.x * 2.0;
+                        
+                        // Tangent-ish movement (perpendicular to radial direction)
+                        vec3 radial = normalize(basePosition);
+                        vec3 tangent1 = normalize(cross(radial, vec3(0.0, 1.0, 0.0)));
+                        vec3 tangent2 = normalize(cross(radial, tangent1));
+                        
+                        // Gentle floating on surface
+                        float floatX = sin(t1) * surfaceFloat * 0.05;
+                        float floatY = sin(t2) * surfaceFloat * 0.03;
+                        float floatZ = sin(t3) * surfaceFloat * 0.02;
+                        
+                        pos += tangent1 * floatX + tangent2 * floatY;
+                        pos += radial * floatZ * 0.3; // Tiny bit of in/out breathing
+                        
+                        // === Depth calculation for dissipation ===
+                        float depth;
                         if (reference == 1) {
                             // Camera reference
                             vec3 toPoint = normalize(basePosition);
@@ -579,12 +643,10 @@
                         }
                         
                         // effectStart: portion of front unaffected (0-1 scale from %)
-                        // if depth > (1 - effectStart), particle is in "safe zone"
                         float safeThreshold = 1.0 - effectStart;
                         float normalizedBack = 0.0;
                         
                         if (depth < safeThreshold) {
-                            // This particle is in the effect zone
                             normalizedBack = (safeThreshold - depth) / safeThreshold;
                             normalizedBack = clamp(normalizedBack, 0.0, 1.0);
                         }
@@ -592,7 +654,7 @@
                         // Apply falloff curve
                         float falloff = applyFalloff(normalizedBack, falloffCurve);
                         
-                        // Float away
+                        // Float away (only for back particles)
                         float floatAmount = falloff * floatAway;
                         float anim = sin(time * seeds.z + seeds.x) * 0.5 + 0.5;
                         
@@ -698,6 +760,12 @@
             settings.floatAway = parseFloat(document.getElementById('floatAway').value);
             settings.floatAwayMin = parseFloat(document.getElementById('floatAwayMin').value);
             settings.floatAwayMax = parseFloat(document.getElementById('floatAwayMax').value);
+            settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
+            settings.surfaceFloatMin = parseFloat(document.getElementById('surfaceFloatMin').value);
+            settings.surfaceFloatMax = parseFloat(document.getElementById('surfaceFloatMax').value);
+            settings.surfaceSpeed = parseFloat(document.getElementById('surfaceSpeed').value);
+            settings.surfaceSpeedMin = parseFloat(document.getElementById('surfaceSpeedMin').value);
+            settings.surfaceSpeedMax = parseFloat(document.getElementById('surfaceSpeedMax').value);
             settings.color = document.getElementById('color').value;
             settings.glow = parseFloat(document.getElementById('glow').value);
             settings.glowMin = parseFloat(document.getElementById('glowMin').value);
@@ -745,6 +813,8 @@
         setupSlider('effectStart', 'effectStart', false, true);
         setupSlider('dissipation', 'dissipation', false, true);
         setupSlider('floatAway', 'floatAway', false, true);
+        setupSlider('surfaceFloat', 'surfaceFloat', false, true);
+        setupSlider('surfaceSpeed', 'surfaceSpeed', false, true);
         setupSlider('glow', 'glow', false, false);
         
         document.getElementById('shape').addEventListener('change', (e) => {

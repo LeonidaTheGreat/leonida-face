@@ -140,7 +140,23 @@
     
     <button class="toggle-btn" id="toggleBtn">⚙️ Settings</button>
     
+    <div class="assembly-controls" style="position: fixed; top: 10px; left: 10px; z-index: 20; display: flex; gap: 8px;">
+        <button class="toggle-btn" id="disassembleBtn">💨 Disassemble</button>
+        <button class="toggle-btn" id="assembleBtn">🧲 Assemble</button>
+    </div>
+    
     <div class="controls" id="controls">
+        <h3>Model</h3>
+        
+        <div class="slider-row">
+            <label>Select Model</label>
+            <select id="modelSelect">
+                <option value="walt">Walt Head</option>
+                <option value="female">Female (Full Body)</option>
+                <option value="male">Male (Full Body)</option>
+            </select>
+        </div>
+        
         <h3>Particles</h3>
         
         <div class="slider-row">
@@ -164,8 +180,13 @@
         </div>
         
         <div class="slider-row">
-            <label>Volume vs Surface (0 = surface only)</label>
-            <input type="range" id="volumeDensity" min="0" max="100" value="100">
+            <label>Scatter (0=constellation, 100=spread)</label>
+            <input type="range" id="scatter" min="0" max="100" value="0">
+        </div>
+        
+        <div class="slider-row">
+            <label>Interior Fill (adds particles inside)</label>
+            <input type="range" id="volumeDensity" min="0" max="100" value="0">
             <div class="range-inputs">
                 <input type="number" id="volumeDensityMin" value="0"> 
                 <span>-</span>
@@ -231,6 +252,11 @@
                 <span>-</span>
                 <input type="number" id="floatAwayMax" value="1000">
             </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Float Direction (0=random, 100=away from camera)</label>
+            <input type="range" id="floatDir" min="0" max="100" value="50">
         </div>
         
         <h3>Surface Animation</h3>
@@ -334,6 +360,9 @@
         let pointsMesh = null;
         let allVertices = [];
         let particleBaseData = [];
+        let isAssembled = true;
+        let assemblyProgress = 1.0; // 0 = scattered, 1 = assembled
+        let targetPositions = null; // For disassembly animation
         
         // Default settings
         const defaultSettings = {
@@ -343,7 +372,8 @@
             density: 90,
             densityMin: 1,
             densityMax: 200,
-            volumeDensity: 100,
+            scatter: 0,
+            volumeDensity: 0,
             volumeDensityMin: 0,
             volumeDensityMax: 100,
             shape: 'soft',
@@ -358,6 +388,7 @@
             floatAway: 200,
             floatAwayMin: 0,
             floatAwayMax: 1000,
+            floatDir: 100,
             surfaceFloat: 15,
             surfaceFloatMin: 0,
             surfaceFloatMax: 100,
@@ -395,6 +426,7 @@
             document.getElementById('densityMin').value = settings.densityMin;
             document.getElementById('densityMax').value = settings.densityMax;
             
+            document.getElementById('scatter').value = settings.scatter;
             document.getElementById('volumeDensity').value = settings.volumeDensity;
             document.getElementById('volumeDensity').min = settings.volumeDensityMin;
             document.getElementById('volumeDensity').max = settings.volumeDensityMax;
@@ -423,6 +455,7 @@
             document.getElementById('floatAway').max = settings.floatAwayMax;
             document.getElementById('floatAwayMin').value = settings.floatAwayMin;
             document.getElementById('floatAwayMax').value = settings.floatAwayMax;
+            document.getElementById('floatDir').value = settings.floatDir;
             
             document.getElementById('surfaceFloat').value = settings.surfaceFloat;
             document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
@@ -448,51 +481,82 @@
             scene.background = new THREE.Color(settings.background === 'dark' ? 0x1a1a2e : 0xf5f5f5);
         }
         
-        // Load model
+        // Model URLs
+        const modelUrls = {
+            walt: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/walt/WaltHead.obj',
+            female: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/female02/female02.obj',
+            male: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/male02/male02.obj'
+        };
+        
+        // Camera settings per model (for full body, zoom out)
+        const cameraSettings = {
+            walt: { z: 3, targetY: 0 },
+            female: { z: 4, targetY: 0.5 },  // Zoom out, focus on upper body
+            male: { z: 4, targetY: 0.5 }
+        };
+        
+        let currentModel = 'walt';
         const loader = new OBJLoader();
-        loader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/walt/WaltHead.obj', (obj) => {
-            document.getElementById('status').textContent = 'Processing...';
+        
+        function loadModel(modelName) {
+            currentModel = modelName;
+            document.getElementById('status').textContent = 'Loading model...';
             
-            let vertices = [];
-            obj.traverse((child) => {
-                if (child.isMesh && child.geometry) {
-                    const positions = child.geometry.attributes.position;
-                    for (let i = 0; i < positions.count; i++) {
-                        vertices.push({
-                            x: positions.getX(i),
-                            y: positions.getY(i),
-                            z: positions.getZ(i)
-                        });
+            const url = modelUrls[modelName];
+            if (!url) return;
+            
+            loader.load(url, (obj) => {
+                document.getElementById('status').textContent = 'Processing...';
+                
+                let vertices = [];
+                obj.traverse((child) => {
+                    if (child.isMesh && child.geometry) {
+                        const positions = child.geometry.attributes.position;
+                        for (let i = 0; i < positions.count; i++) {
+                            vertices.push({
+                                x: positions.getX(i),
+                                y: positions.getY(i),
+                                z: positions.getZ(i)
+                            });
+                        }
                     }
-                }
+                });
+                
+                // Normalize and CENTER at origin
+                const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+                vertices.forEach(v => {
+                    bounds.minX = Math.min(bounds.minX, v.x); bounds.maxX = Math.max(bounds.maxX, v.x);
+                    bounds.minY = Math.min(bounds.minY, v.y); bounds.maxY = Math.max(bounds.maxY, v.y);
+                    bounds.minZ = Math.min(bounds.minZ, v.z); bounds.maxZ = Math.max(bounds.maxZ, v.z);
+                });
+                
+                const cx = (bounds.minX + bounds.maxX) / 2;
+                const cy = (bounds.minY + bounds.maxY) / 2;
+                const cz = (bounds.minZ + bounds.maxZ) / 2;
+                const scale = 2 / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, bounds.maxZ - bounds.minZ);
+                
+                allVertices = vertices.map(v => ({
+                    x: (v.x - cx) * scale,
+                    y: (v.y - cy) * scale,
+                    z: (v.z - cz) * scale
+                }));
+                
+                // Adjust camera for this model
+                const camSettings = cameraSettings[modelName] || { z: 3, targetY: 0 };
+                camera.position.set(0, 0, camSettings.z);
+                controls.target.set(0, camSettings.targetY, 0);
+                controls.update();
+                
+                // Calculate surface detection data
+                computeSurfaceData();
+                
+                applySettingsToUI();
+                initParticles();
             });
-            
-            // Normalize and CENTER at origin
-            const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
-            vertices.forEach(v => {
-                bounds.minX = Math.min(bounds.minX, v.x); bounds.maxX = Math.max(bounds.maxX, v.x);
-                bounds.minY = Math.min(bounds.minY, v.y); bounds.maxY = Math.max(bounds.maxY, v.y);
-                bounds.minZ = Math.min(bounds.minZ, v.z); bounds.maxZ = Math.max(bounds.maxZ, v.z);
-            });
-            
-            const cx = (bounds.minX + bounds.maxX) / 2;
-            const cy = (bounds.minY + bounds.maxY) / 2;
-            const cz = (bounds.minZ + bounds.maxZ) / 2;
-            const scale = 2 / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, bounds.maxZ - bounds.minZ);
-            
-            allVertices = vertices.map(v => ({
-                x: (v.x - cx) * scale,
-                y: (v.y - cy) * scale,
-                z: (v.z - cz) * scale
-            }));
-            
-            // Calculate surface detection data
-            // For each vertex, compute its "surfaceness" (how close to outer shell)
-            computeSurfaceData();
-            
-            applySettingsToUI();
-            initParticles();
-        });
+        }
+        
+        // Load initial model
+        loadModel('walt');
         
         let vertexSurfaceScore = []; // 0 = interior, 1 = surface
         
@@ -542,46 +606,64 @@
         function initParticles() {
             // Density: 100 = all original vertices, 200 = 2x oversampling, etc.
             const densityFactor = settings.density / 100;
-            const volumeThreshold = settings.volumeDensity / 100; // 0 = surface only, 1 = include all
+            // Volume: 0 = no interior, 100 = add same amount of particles filling interior
+            const volumeFill = settings.volumeDensity / 100;
             
             particleBaseData = [];
             
-            // How many times to iterate through vertices
+            // === SURFACE PARTICLES ===
+            // Density controls how many particles
+            // Scatter: 0 = constellation (edges), 100 = even surface coverage
             const passes = Math.ceil(densityFactor);
             const lastPassChance = densityFactor - Math.floor(densityFactor);
+            const scatterAmount = settings.scatter / 100;
+            
+            // Search range scales with mesh size (2% of vertices = good locality)
+            const searchRange = Math.max(10, Math.floor(allVertices.length * 0.02));
             
             for (let pass = 0; pass < passes; pass++) {
                 const isLastPass = (pass === passes - 1) && lastPassChance > 0 && lastPassChance < 1;
                 
                 for (let i = 0; i < allVertices.length; i++) {
-                    // For partial passes, randomly include
                     if (isLastPass && Math.random() > lastPassChance) continue;
-                    
-                    // Surface vs Volume filtering (only if volumeDensity < 100)
-                    if (volumeThreshold < 1.0 && vertexSurfaceScore.length > 0) {
-                        const surfaceScore = vertexSurfaceScore[i] !== undefined ? vertexSurfaceScore[i] : 1;
-                        const surfaceThreshold = 0.6; // Consider "surface" if > 60% of max radius
-                        
-                        if (surfaceScore < surfaceThreshold) {
-                            // This is an interior vertex - skip unless volume density allows
-                            if (Math.random() > volumeThreshold) continue;
-                        }
-                    }
                     
                     const v = allVertices[i];
                     let x = v.x, y = v.y, z = v.z;
                     
-                    // For oversampled passes (pass > 0), interpolate with a nearby vertex
+                    // For oversampled passes, distribute particles
                     if (pass > 0) {
-                        const searchRange = Math.max(10, Math.floor(allVertices.length * 0.02));
+                        // Pick a nearby vertex (locality preserves mesh structure)
                         const offset = Math.floor(Math.random() * searchRange) - Math.floor(searchRange / 2);
                         const neighborIdx = Math.max(0, Math.min(allVertices.length - 1, i + offset));
                         const neighbor = allVertices[neighborIdx];
                         
-                        const t = Math.random() * 0.5;
+                        // Scatter controls interpolation:
+                        // 0 = full range along edges (constellation lines)
+                        // 100 = cluster near midpoints (fills triangles more evenly)
+                        let t;
+                        if (scatterAmount < 0.5) {
+                            // Constellation mode: full edge interpolation
+                            t = Math.random(); // 0 to 1
+                        } else {
+                            // Even coverage: bias toward middle of edge, add perpendicular offset
+                            t = 0.3 + Math.random() * 0.4; // 0.3 to 0.7 (middle region)
+                        }
+                        
                         x = v.x + (neighbor.x - v.x) * t;
                         y = v.y + (neighbor.y - v.y) * t;
                         z = v.z + (neighbor.z - v.z) * t;
+                        
+                        // At high scatter, add small perpendicular offset to fill faces
+                        if (scatterAmount > 0.5) {
+                            const perpScale = (scatterAmount - 0.5) * 0.04;
+                            // Use another nearby vertex to get perpendicular direction
+                            const offset2 = Math.floor(Math.random() * searchRange);
+                            const idx2 = Math.max(0, Math.min(allVertices.length - 1, i + offset2));
+                            const v2 = allVertices[idx2];
+                            x += (v2.x - v.x) * perpScale * (Math.random() - 0.5);
+                            y += (v2.y - v.y) * perpScale * (Math.random() - 0.5);
+                            z += (v2.z - v.z) * perpScale * (Math.random() - 0.5);
+                        }
                     }
                     
                     particleBaseData.push({
@@ -589,10 +671,41 @@
                         seed1: Math.random() * Math.PI * 2,
                         seed2: Math.random() * Math.PI * 2,
                         driftX: (Math.random() - 0.5) * 2,
-                        driftY: (Math.random() - 0.3),
-                        driftZ: -Math.random(),
+                        driftY: (Math.random() - 0.5) * 2,
+                        driftZ: (Math.random() - 0.5) * 2,
                         speed: 0.3 + Math.random() * 0.4,
                         sizeVar: 0.7 + Math.random() * 0.6
+                    });
+                }
+            }
+            
+            // === VOLUME PARTICLES ===
+            // Adds interior particles by interpolating between TWO random surface vertices
+            // This fills the interior volume, not just rays to center
+            if (volumeFill > 0) {
+                const surfaceCount = particleBaseData.length;
+                const volumeCount = Math.floor(surfaceCount * volumeFill);
+                
+                for (let i = 0; i < volumeCount; i++) {
+                    // Pick TWO random surface vertices
+                    const v1 = allVertices[Math.floor(Math.random() * allVertices.length)];
+                    const v2 = allVertices[Math.floor(Math.random() * allVertices.length)];
+                    
+                    // Interpolate between them (creates points throughout volume)
+                    const t = Math.random();
+                    const x = v1.x + (v2.x - v1.x) * t;
+                    const y = v1.y + (v2.y - v1.y) * t;
+                    const z = v1.z + (v2.z - v1.z) * t;
+                    
+                    particleBaseData.push({
+                        x, y, z,
+                        seed1: Math.random() * Math.PI * 2,
+                        seed2: Math.random() * Math.PI * 2,
+                        driftX: (Math.random() - 0.5) * 2,
+                        driftY: (Math.random() - 0.5) * 2,
+                        driftZ: (Math.random() - 0.5) * 2,
+                        speed: 0.3 + Math.random() * 0.4,
+                        sizeVar: 0.5 + Math.random() * 0.5 // Slightly smaller for interior
                     });
                 }
             }
@@ -652,9 +765,11 @@
                     effectStart: { value: settings.effectStart / 100 },
                     dissipation: { value: settings.dissipation / 100 },
                     floatAway: { value: settings.floatAway / 100 },
+                    floatDir: { value: settings.floatDir / 100 },
                     falloffCurve: { value: getFalloffCurveIndex() },
                     reference: { value: settings.reference === 'camera' ? 1 : 0 },
                     cameraDir: { value: new THREE.Vector3(0, 0, -1) },
+                    cameraPos: { value: new THREE.Vector3(0, 0, 3) },
                     surfaceFloat: { value: settings.surfaceFloat / 100 },
                     surfaceSpeed: { value: settings.surfaceSpeed / 100 }
                 },
@@ -668,9 +783,11 @@
                     uniform float effectStart;
                     uniform float dissipation;
                     uniform float floatAway;
+                    uniform float floatDir;
                     uniform int falloffCurve;
                     uniform int reference;
                     uniform vec3 cameraDir;
+                    uniform vec3 cameraPos;
                     uniform float surfaceFloat;
                     uniform float surfaceSpeed;
                     
@@ -735,7 +852,22 @@
                         float floatAmount = falloff * floatAway;
                         float anim = sin(time * seeds.z + seeds.x) * 0.5 + 0.5;
                         
-                        pos += drift * floatAmount * (0.5 + anim * 0.5);
+                        // Away from camera = direction camera is looking
+                        vec3 awayDir = cameraDir;
+                        
+                        // First: filter out toward-camera component from drift
+                        vec3 filteredDrift = drift;
+                        vec3 towardCamera = -cameraDir;
+                        float towardComponent = dot(drift, towardCamera);
+                        if (towardComponent > 0.0) {
+                            filteredDrift -= towardCamera * towardComponent;
+                        }
+                        
+                        // floatDir: 0 = random (but never toward camera), 1 = directly away
+                        float driftMag = length(drift);
+                        vec3 floatDirection = mix(filteredDrift, awayDir * driftMag, floatDir);
+                        
+                        pos += floatDirection * floatAmount * (0.5 + anim * 0.5);
                         pos.y += sin(time * 0.5 + seeds.y) * 0.03 * falloff;
                         
                         // Alpha based on dissipation
@@ -783,6 +915,42 @@
             document.getElementById('status').textContent = `${count.toLocaleString()} particles`;
         }
         
+        // Assembly/Disassembly functions
+        function disassemble() {
+            if (!pointsMesh) return;
+            isAssembled = false;
+            const positions = pointsMesh.geometry.attributes.position.array;
+            const basePos = pointsMesh.geometry.attributes.basePosition.array;
+            const count = positions.length / 3;
+            
+            // Create scattered target positions
+            targetPositions = new Float32Array(positions.length);
+            for (let i = 0; i < count; i++) {
+                const bx = basePos[i * 3];
+                const by = basePos[i * 3 + 1];
+                const bz = basePos[i * 3 + 2];
+                
+                // Scatter outward from center with randomness
+                const len = Math.sqrt(bx*bx + by*by + bz*bz) || 1;
+                const nx = bx / len, ny = by / len, nz = bz / len;
+                const scatter = 3 + Math.random() * 4;
+                
+                targetPositions[i * 3] = nx * scatter + (Math.random() - 0.5) * 2;
+                targetPositions[i * 3 + 1] = ny * scatter + (Math.random() - 0.5) * 2;
+                targetPositions[i * 3 + 2] = nz * scatter + (Math.random() - 0.5) * 2;
+            }
+            document.getElementById('status').textContent = 'Disassembling...';
+        }
+        
+        function assemble() {
+            isAssembled = true;
+            // Target positions are the original base positions
+            if (pointsMesh) {
+                targetPositions = pointsMesh.geometry.attributes.basePosition.array.slice();
+            }
+            document.getElementById('status').textContent = 'Assembling...';
+        }
+        
         // Animation
         function animate() {
             requestAnimationFrame(animate);
@@ -795,6 +963,36 @@
                 const dir = new THREE.Vector3();
                 camera.getWorldDirection(dir);
                 uniforms.cameraDir.value.copy(dir);
+                uniforms.cameraPos.value.copy(camera.position);
+                
+                // Handle assembly/disassembly animation
+                if (targetPositions) {
+                    const positions = pointsMesh.geometry.attributes.position.array;
+                    const speed = 0.05; // Interpolation speed
+                    let maxDist = 0;
+                    
+                    for (let i = 0; i < positions.length; i++) {
+                        const diff = targetPositions[i] - positions[i];
+                        positions[i] += diff * speed;
+                        maxDist = Math.max(maxDist, Math.abs(diff));
+                    }
+                    
+                    pointsMesh.geometry.attributes.position.needsUpdate = true;
+                    
+                    // Update assembly progress
+                    assemblyProgress = isAssembled ? 
+                        Math.min(1, assemblyProgress + 0.02) : 
+                        Math.max(0, assemblyProgress - 0.02);
+                    
+                    // Check if animation is complete
+                    if (maxDist < 0.01) {
+                        if (isAssembled) {
+                            document.getElementById('status').textContent = `${particleBaseData.length.toLocaleString()} particles`;
+                        } else {
+                            document.getElementById('status').textContent = 'Scattered';
+                        }
+                    }
+                }
             }
             
             bloomPass.strength = settings.glow / 100;
@@ -816,6 +1014,15 @@
             document.getElementById('controls').classList.toggle('hidden');
         });
         
+        // Assembly buttons
+        document.getElementById('disassembleBtn').addEventListener('click', disassemble);
+        document.getElementById('assembleBtn').addEventListener('click', assemble);
+        
+        // Model selector
+        document.getElementById('modelSelect').addEventListener('change', (e) => {
+            loadModel(e.target.value);
+        });
+        
         // Save defaults
         document.getElementById('saveBtn').addEventListener('click', () => {
             // Gather all current values
@@ -825,6 +1032,7 @@
             settings.density = parseFloat(document.getElementById('density').value);
             settings.densityMin = parseFloat(document.getElementById('densityMin').value);
             settings.densityMax = parseFloat(document.getElementById('densityMax').value);
+            settings.scatter = parseFloat(document.getElementById('scatter').value);
             settings.volumeDensity = parseFloat(document.getElementById('volumeDensity').value);
             settings.volumeDensityMin = parseFloat(document.getElementById('volumeDensityMin').value);
             settings.volumeDensityMax = parseFloat(document.getElementById('volumeDensityMax').value);
@@ -840,6 +1048,7 @@
             settings.floatAway = parseFloat(document.getElementById('floatAway').value);
             settings.floatAwayMin = parseFloat(document.getElementById('floatAwayMin').value);
             settings.floatAwayMax = parseFloat(document.getElementById('floatAwayMax').value);
+            settings.floatDir = parseFloat(document.getElementById('floatDir').value);
             settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
             settings.surfaceFloatMin = parseFloat(document.getElementById('surfaceFloatMin').value);
             settings.surfaceFloatMax = parseFloat(document.getElementById('surfaceFloatMax').value);
@@ -890,10 +1099,25 @@
         
         setupSlider('size', 'size', true, false);
         setupSlider('density', 'density', true, false);
+        
+        // Scatter slider (rebuilds particles)
+        document.getElementById('scatter').addEventListener('input', (e) => {
+            settings.scatter = parseFloat(e.target.value);
+            initParticles();
+        });
+        
         setupSlider('volumeDensity', 'volumeDensity', true, false);
         setupSlider('effectStart', 'effectStart', false, true);
         setupSlider('dissipation', 'dissipation', false, true);
         setupSlider('floatAway', 'floatAway', false, true);
+        
+        // Float direction slider (no min/max inputs)
+        document.getElementById('floatDir').addEventListener('input', (e) => {
+            settings.floatDir = parseFloat(e.target.value);
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.floatDir.value = settings.floatDir / 100;
+            }
+        });
         setupSlider('surfaceFloat', 'surfaceFloat', false, true);
         setupSlider('surfaceSpeed', 'surfaceSpeed', false, true);
         setupSlider('glow', 'glow', false, false);

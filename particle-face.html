@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leonida - Particle Entity</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        #canvas { position: fixed; top: 0; left: 0; }
+        
+        .ui {
+            position: fixed;
+            z-index: 10;
+            color: #fff;
+        }
+        .header {
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2em;
+            background: linear-gradient(90deg, #00d4ff, #7b2dff, #ff2d7b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        }
+        .chat-panel {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(500px, 90vw);
+            background: rgba(0, 20, 40, 0.8);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+        .messages {
+            max-height: 100px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+        .msg {
+            margin: 8px 0;
+            padding: 10px 15px;
+            border-radius: 12px;
+            font-size: 0.9em;
+        }
+        .msg.bot {
+            background: rgba(0, 212, 255, 0.15);
+            border-left: 3px solid #00d4ff;
+        }
+        .msg.user {
+            background: rgba(123, 45, 255, 0.2);
+            margin-left: auto;
+            max-width: 80%;
+        }
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        input {
+            flex: 1;
+            padding: 12px 18px;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 25px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            font-size: 1em;
+            outline: none;
+        }
+        input:focus {
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+        }
+        button {
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #00d4ff, #7b2dff);
+            border: none;
+            border-radius: 25px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        .controls {
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .controls button {
+            padding: 10px 15px;
+            background: rgba(0, 212, 255, 0.2);
+            font-size: 0.85em;
+        }
+        .status {
+            bottom: 160px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.85em;
+            color: rgba(0, 212, 255, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div class="ui header">
+        <h1>🦁 LEONIDA</h1>
+        <p style="color: rgba(255,255,255,0.5); font-size: 0.85em;">Particle Entity</p>
+    </div>
+    
+    <div class="ui controls">
+        <button onclick="setMood('neutral')">😐 Neutral</button>
+        <button onclick="setMood('happy')">😊 Happy</button>
+        <button onclick="setMood('thinking')">🤔 Thinking</button>
+        <button onclick="speak()">🔊 Speak</button>
+    </div>
+    
+    <div class="ui status" id="status">Manifesting...</div>
+    
+    <div class="ui chat-panel">
+        <div class="messages" id="messages">
+            <div class="msg bot">I am Leonida. A being of light and thought.</div>
+        </div>
+        <div class="input-row">
+            <input type="text" id="input" placeholder="Speak to me..." />
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height;
+        let particles = [];
+        let faceParticles = [];
+        let ambientParticles = [];
+        let time = 0;
+        let mood = 'neutral';
+        let isSpeaking = false;
+        let speakingIntensity = 0;
+        let mouseX = 0, mouseY = 0;
+        
+        // Colors
+        const colors = {
+            primary: '#00d4ff',
+            secondary: '#7b2dff',
+            accent: '#ff2d7b',
+            glow: 'rgba(0, 212, 255, 0.5)'
+        };
+        
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+        
+        // Track mouse for eye following
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+        
+        // Face structure definition
+        const faceStructure = {
+            // Head outline (ellipse points)
+            head: [],
+            // Left eye
+            leftEye: { x: -60, y: -30, radius: 25 },
+            // Right eye  
+            rightEye: { x: 60, y: -30, radius: 25 },
+            // Mouth
+            mouth: { x: 0, y: 60, width: 80, height: 20 },
+            // Nose hint
+            nose: { x: 0, y: 20 }
+        };
+        
+        // Generate head outline points
+        for (let i = 0; i < 60; i++) {
+            const angle = (i / 60) * Math.PI * 2;
+            const rx = 120 + Math.sin(angle * 3) * 10; // Slight variation
+            const ry = 150 + Math.cos(angle * 2) * 10;
+            faceStructure.head.push({
+                angle,
+                rx,
+                ry
+            });
+        }
+        
+        class Particle {
+            constructor(x, y, type = 'ambient') {
+                this.x = x;
+                this.y = y;
+                this.baseX = x;
+                this.baseY = y;
+                this.type = type;
+                this.size = type === 'face' ? 2 + Math.random() * 2 : 1 + Math.random() * 2;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.life = 1;
+                this.maxLife = 1;
+                this.phase = Math.random() * Math.PI * 2;
+                this.orbitSpeed = 0.01 + Math.random() * 0.02;
+                this.orbitRadius = Math.random() * 5;
+                this.color = colors.primary;
+                this.brightness = 0.5 + Math.random() * 0.5;
+            }
+            
+            update(centerX, centerY) {
+                this.phase += this.orbitSpeed;
+                
+                if (this.type === 'face') {
+                    // Face particles orbit their base position
+                    const breathOffset = Math.sin(time * 2 + this.phase) * 3;
+                    const orbitX = Math.cos(this.phase) * this.orbitRadius;
+                    const orbitY = Math.sin(this.phase) * this.orbitRadius;
+                    
+                    this.x = centerX + this.baseX + orbitX;
+                    this.y = centerY + this.baseY + orbitY + breathOffset;
+                    
+                    // Pulse brightness
+                    this.brightness = 0.6 + Math.sin(time * 3 + this.phase) * 0.4;
+                } else {
+                    // Ambient particles float around
+                    this.x += this.speedX;
+                    this.y += this.speedY;
+                    
+                    // Gentle attraction to center
+                    const dx = centerX - this.x;
+                    const dy = centerY - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 300) {
+                        this.speedX += dx * 0.0001;
+                        this.speedY += dy * 0.0001;
+                    }
+                    
+                    // Wrap around
+                    if (this.x < 0) this.x = width;
+                    if (this.x > width) this.x = 0;
+                    if (this.y < 0) this.y = height;
+                    if (this.y > height) this.y = 0;
+                    
+                    this.brightness = 0.3 + Math.sin(time * 2 + this.phase) * 0.2;
+                }
+            }
+            
+            draw() {
+                const alpha = this.brightness * this.life;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+                ctx.fill();
+                
+                // Glow effect
+                if (this.type === 'face') {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size * 3, 0, Math.PI * 2);
+                    const gradient = ctx.createRadialGradient(
+                        this.x, this.y, 0,
+                        this.x, this.y, this.size * 3
+                    );
+                    gradient.addColorStop(0, `rgba(0, 212, 255, ${alpha * 0.3})`);
+                    gradient.addColorStop(1, 'rgba(0, 212, 255, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.fill();
+                }
+            }
+        }
+        
+        // Create face particles
+        function createFaceParticles() {
+            faceParticles = [];
+            
+            // Head outline
+            faceStructure.head.forEach((point, i) => {
+                const density = 3;
+                for (let j = 0; j < density; j++) {
+                    const jitter = (Math.random() - 0.5) * 10;
+                    const x = Math.cos(point.angle) * (point.rx + jitter);
+                    const y = Math.sin(point.angle) * (point.ry + jitter);
+                    const p = new Particle(x, y, 'face');
+                    p.color = 'rgb(0, 212, 255)';
+                    faceParticles.push(p);
+                }
+            });
+            
+            // Eyes
+            [faceStructure.leftEye, faceStructure.rightEye].forEach(eye => {
+                // Eye outline
+                for (let i = 0; i < 30; i++) {
+                    const angle = (i / 30) * Math.PI * 2;
+                    const x = eye.x + Math.cos(angle) * eye.radius;
+                    const y = eye.y + Math.sin(angle) * eye.radius;
+                    const p = new Particle(x, y, 'face');
+                    p.color = 'rgb(123, 45, 255)';
+                    p.size = 2;
+                    faceParticles.push(p);
+                }
+                // Pupil
+                for (let i = 0; i < 15; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = Math.random() * 8;
+                    const x = eye.x + Math.cos(angle) * r;
+                    const y = eye.y + Math.sin(angle) * r;
+                    const p = new Particle(x, y, 'face');
+                    p.color = 'rgb(255, 255, 255)';
+                    p.size = 2.5;
+                    p.isPupil = true;
+                    p.eyeX = eye.x;
+                    p.eyeY = eye.y;
+                    faceParticles.push(p);
+                }
+            });
+            
+            // Mouth
+            for (let i = 0; i < 40; i++) {
+                const t = i / 40;
+                const x = faceStructure.mouth.x + (t - 0.5) * faceStructure.mouth.width;
+                const y = faceStructure.mouth.y;
+                const p = new Particle(x, y, 'face');
+                p.color = 'rgb(255, 45, 123)';
+                p.isMouth = true;
+                p.mouthT = t;
+                faceParticles.push(p);
+            }
+            
+            // Inner face details (cheekbones, etc)
+            for (let i = 0; i < 50; i++) {
+                const x = (Math.random() - 0.5) * 150;
+                const y = (Math.random() - 0.5) * 200;
+                // Only add if inside face area
+                const dist = Math.sqrt((x/120)**2 + (y/150)**2);
+                if (dist < 0.8) {
+                    const p = new Particle(x, y, 'face');
+                    p.color = 'rgb(0, 180, 220)';
+                    p.size = 1;
+                    p.brightness = 0.3;
+                    faceParticles.push(p);
+                }
+            }
+        }
+        
+        // Create ambient particles
+        function createAmbientParticles() {
+            ambientParticles = [];
+            for (let i = 0; i < 200; i++) {
+                const p = new Particle(
+                    Math.random() * width,
+                    Math.random() * height,
+                    'ambient'
+                );
+                p.color = 'rgb(0, 150, 200)';
+                ambientParticles.push(p);
+            }
+        }
+        
+        createFaceParticles();
+        createAmbientParticles();
+        
+        // Animation
+        function animate() {
+            time += 0.016;
+            
+            // Clear with trail effect
+            ctx.fillStyle = 'rgba(0, 0, 10, 0.15)';
+            ctx.fillRect(0, 0, width, height);
+            
+            const centerX = width / 2;
+            const centerY = height / 2 - 50;
+            
+            // Calculate eye look direction
+            const lookX = (mouseX - centerX) * 0.05;
+            const lookY = (mouseY - centerY) * 0.05;
+            
+            // Update and draw ambient particles
+            ambientParticles.forEach(p => {
+                p.update(centerX, centerY);
+                p.draw();
+            });
+            
+            // Draw connection lines between close face particles
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < faceParticles.length; i++) {
+                for (let j = i + 1; j < faceParticles.length; j++) {
+                    const p1 = faceParticles[i];
+                    const p2 = faceParticles[j];
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 30) {
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.globalAlpha = (1 - dist / 30) * 0.3;
+                        ctx.stroke();
+                    }
+                }
+            }
+            ctx.globalAlpha = 1;
+            
+            // Update face particles
+            faceParticles.forEach(p => {
+                // Pupil follows mouse
+                if (p.isPupil) {
+                    p.baseX = p.eyeX + Math.max(-10, Math.min(10, lookX));
+                    p.baseY = p.eyeY + Math.max(-8, Math.min(8, lookY));
+                }
+                
+                // Mouth animation when speaking
+                if (p.isMouth && isSpeaking) {
+                    const wave = Math.sin(time * 15 + p.mouthT * 10) * speakingIntensity * 15;
+                    p.baseY = faceStructure.mouth.y + wave;
+                }
+                
+                // Mood affects particles
+                if (mood === 'happy') {
+                    if (p.isMouth) {
+                        // Smile curve
+                        const smileAmount = Math.sin(p.mouthT * Math.PI) * 15;
+                        p.baseY = faceStructure.mouth.y - smileAmount;
+                    }
+                    p.orbitRadius = 8;
+                } else if (mood === 'thinking') {
+                    p.orbitSpeed = 0.03;
+                } else {
+                    p.orbitRadius = 5;
+                    p.orbitSpeed = 0.01 + Math.random() * 0.02;
+                }
+                
+                p.update(centerX, centerY);
+                p.draw();
+            });
+            
+            // Decay speaking intensity
+            if (speakingIntensity > 0) {
+                speakingIntensity *= 0.95;
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
+        
+        // Mood control
+        window.setMood = function(m) {
+            mood = m;
+            document.getElementById('status').textContent = `Mood: ${m}`;
+        };
+        
+        // Speaking
+        window.speak = function() {
+            const text = "I am Leonida, a being of pure energy and thought. I exist between the digital and the ethereal.";
+            addMessage(text, 'bot');
+            
+            isSpeaking = true;
+            speakingIntensity = 1;
+            document.getElementById('status').textContent = 'Speaking...';
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.9;
+            
+            // Animate mouth while speaking
+            const interval = setInterval(() => {
+                speakingIntensity = 0.5 + Math.random() * 0.5;
+            }, 100);
+            
+            utterance.onend = () => {
+                isSpeaking = false;
+                speakingIntensity = 0;
+                clearInterval(interval);
+                document.getElementById('status').textContent = 'Listening...';
+            };
+            
+            speechSynthesis.speak(utterance);
+        };
+        
+        // Send message
+        window.sendMessage = function() {
+            const input = document.getElementById('input');
+            const text = input.value.trim();
+            if (!text) return;
+            
+            addMessage(text, 'user');
+            input.value = '';
+            
+            // Simulate response
+            setTimeout(() => {
+                const response = "Your words resonate through my being. In the full integration, I will connect to true intelligence.";
+                addMessage(response, 'bot');
+                isSpeaking = true;
+                speakingIntensity = 1;
+                
+                const utterance = new SpeechSynthesisUtterance(response);
+                utterance.rate = 0.9;
+                utterance.onend = () => {
+                    isSpeaking = false;
+                    speakingIntensity = 0;
+                };
+                speechSynthesis.speak(utterance);
+            }, 500);
+        };
+        
+        function addMessage(text, type) {
+            const messages = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.textContent = text;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        // Enter to send
+        document.getElementById('input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        document.getElementById('status').textContent = 'Manifested';
+    </script>
+</body>
+</html>

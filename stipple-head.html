@@ -68,7 +68,14 @@
             <input type="range" id="density" min="10" max="100" value="50">
         </label>
         <label>Particle Size
-            <input type="range" id="size" min="1" max="20" value="6">
+            <input type="range" id="size" min="0.5" max="10" value="2" step="0.1">
+        </label>
+        <label>Shape
+            <select id="shape">
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+                <option value="soft">Soft Circle</option>
+            </select>
         </label>
         <label>Background
             <select id="background">
@@ -117,7 +124,8 @@
         let allVertices = [];
         let dissipationAmount = 0.7;
         let densityAmount = 0.5;
-        let particleSizeValue = 6;
+        let particleSizeValue = 2;
+        let particleShape = 'circle';
         let isDark = false;
         
         // Load head model
@@ -202,19 +210,20 @@
                 // Base density sampling
                 if (Math.random() > densityAmount) return false;
                 
-                // Back dissipation - z < 0 is back of head
-                if (v.z < 0) {
-                    const backFactor = Math.abs(v.z); // 0 at center, ~1 at back
-                    const keepChance = Math.pow(1 - backFactor * dissipationAmount, 2);
-                    return Math.random() < keepChance;
-                }
+                // Dissipation based on Z depth (front to back)
+                // v.z ranges from ~-1 (back) to ~1 (front)
+                // We want: front (z > 0.5) = full density, back (z < -0.5) = very sparse
                 
-                // Front face - also consider surface angle
-                // Edges (where normal points sideways) get more particles
-                const edgeFactor = 1 - Math.abs(v.nz);
-                const edgeBonus = edgeFactor * 0.3;
+                const normalizedZ = (v.z + 1) / 2; // 0 = back, 1 = front
                 
-                return Math.random() < (1 + edgeBonus);
+                // Dissipation curve: exponential falloff toward back
+                // At dissipationAmount = 1, back has almost no particles
+                // At dissipationAmount = 0, uniform density
+                const dissipationCurve = Math.pow(normalizedZ, dissipationAmount * 3);
+                
+                if (Math.random() > dissipationCurve) return false;
+                
+                return true;
             });
             
             // Create point cloud
@@ -227,20 +236,22 @@
                 positions[i * 3 + 1] = v.y;
                 positions[i * 3 + 2] = v.z;
                 
-                // Vary size slightly, smaller toward back
-                const depthFactor = (v.z + 1) / 2;
-                sizes[i] = particleSizeValue * (0.5 + depthFactor * 0.5) * (0.8 + Math.random() * 0.4);
+                // Vary size - smaller toward back for depth effect
+                const normalizedZ = (v.z + 1) / 2;
+                const depthScale = 0.3 + normalizedZ * 0.7; // 0.3 at back, 1.0 at front
+                sizes[i] = particleSizeValue * depthScale * (0.7 + Math.random() * 0.6);
             }
             
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
             geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
             
-            // Shader for round points with size attenuation
+            // Shader for points with shape options
             const material = new THREE.ShaderMaterial({
                 uniforms: {
                     color: { value: new THREE.Color(isDark ? 0xffffff : 0x000000) },
-                    opacity: { value: isDark ? 0.9 : 0.85 }
+                    opacity: { value: isDark ? 0.9 : 0.85 },
+                    shape: { value: particleShape === 'circle' ? 0 : (particleShape === 'square' ? 1 : 2) }
                 },
                 vertexShader: `
                     attribute float size;
@@ -248,26 +259,37 @@
                     
                     void main() {
                         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                        gl_PointSize = size * (300.0 / -mvPosition.z);
+                        gl_PointSize = size * (100.0 / -mvPosition.z);
                         gl_Position = projectionMatrix * mvPosition;
                         
                         // Fade slightly with depth
-                        vAlpha = 0.7 + (position.z + 1.0) * 0.15;
+                        vAlpha = 0.6 + (position.z + 1.0) * 0.2;
                     }
                 `,
                 fragmentShader: `
                     uniform vec3 color;
                     uniform float opacity;
+                    uniform int shape;
                     varying float vAlpha;
                     
                     void main() {
-                        // Round point
                         vec2 center = gl_PointCoord - 0.5;
                         float dist = length(center);
-                        if (dist > 0.5) discard;
+                        float alpha = opacity * vAlpha;
                         
-                        // Soft edge
-                        float alpha = smoothstep(0.5, 0.3, dist) * opacity * vAlpha;
+                        if (shape == 0) {
+                            // Hard circle
+                            if (dist > 0.5) discard;
+                            alpha *= step(dist, 0.45);
+                        } else if (shape == 1) {
+                            // Square - no discard needed
+                            alpha *= 1.0;
+                        } else {
+                            // Soft circle
+                            if (dist > 0.5) discard;
+                            alpha *= smoothstep(0.5, 0.2, dist);
+                        }
+                        
                         gl_FragColor = vec4(color, alpha);
                     }
                 `,
@@ -309,6 +331,11 @@
         
         document.getElementById('size').addEventListener('input', (e) => {
             particleSizeValue = parseFloat(e.target.value);
+            createStippleHead();
+        });
+        
+        document.getElementById('shape').addEventListener('change', (e) => {
+            particleShape = e.target.value;
             createStippleHead();
         });
         

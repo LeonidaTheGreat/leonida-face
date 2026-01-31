@@ -432,21 +432,39 @@
         });
         
         function initParticles() {
-            // Density now properly samples - higher value = more particles
+            // Density: 100 = all original vertices, 200 = 2x oversampling, etc.
             const densityFactor = settings.density / 100;
             
-            particleBaseData = allVertices
-                .filter(() => Math.random() < densityFactor)
-                .map(v => ({
-                    x: v.x, y: v.y, z: v.z,
-                    seed1: Math.random() * Math.PI * 2,
-                    seed2: Math.random() * Math.PI * 2,
-                    driftX: (Math.random() - 0.5) * 2,
-                    driftY: (Math.random() - 0.3),
-                    driftZ: -Math.random(),
-                    speed: 0.3 + Math.random() * 0.4,
-                    sizeVar: 0.7 + Math.random() * 0.6
-                }));
+            particleBaseData = [];
+            
+            // How many times to iterate through vertices
+            const passes = Math.ceil(densityFactor);
+            const lastPassChance = densityFactor - Math.floor(densityFactor);
+            
+            for (let pass = 0; pass < passes; pass++) {
+                const isLastPass = (pass === passes - 1) && lastPassChance > 0 && lastPassChance < 1;
+                
+                for (const v of allVertices) {
+                    // For partial passes, randomly include
+                    if (isLastPass && Math.random() > lastPassChance) continue;
+                    
+                    // Add slight jitter for oversampled particles to avoid exact overlap
+                    const jitter = pass > 0 ? 0.01 : 0;
+                    
+                    particleBaseData.push({
+                        x: v.x + (Math.random() - 0.5) * jitter,
+                        y: v.y + (Math.random() - 0.5) * jitter,
+                        z: v.z + (Math.random() - 0.5) * jitter,
+                        seed1: Math.random() * Math.PI * 2,
+                        seed2: Math.random() * Math.PI * 2,
+                        driftX: (Math.random() - 0.5) * 2,
+                        driftY: (Math.random() - 0.3),
+                        driftZ: -Math.random(),
+                        speed: 0.3 + Math.random() * 0.4,
+                        sizeVar: 0.7 + Math.random() * 0.6
+                    });
+                }
+            }
             
             createMesh();
         }

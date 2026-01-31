@@ -143,6 +143,7 @@
     <div class="assembly-controls" style="position: fixed; top: 10px; left: 10px; z-index: 20; display: flex; gap: 8px;">
         <button class="toggle-btn" id="disassembleBtn">💨 Disassemble</button>
         <button class="toggle-btn" id="assembleBtn">🧲 Assemble</button>
+        <button class="toggle-btn" id="animateBtn">🎭 Animate</button>
     </div>
     
     <div class="controls" id="controls">
@@ -363,6 +364,8 @@
         let isAssembled = true;
         let assemblyProgress = 1.0; // 0 = scattered, 1 = assembled
         let targetPositions = null; // For disassembly animation
+        let headAnimationEnabled = false;
+        let modelGroup = null; // Container for model rotation
         
         // Default settings
         const defaultSettings = {
@@ -719,7 +722,10 @@
         }
         
         function createMesh() {
-            if (pointsMesh) scene.remove(pointsMesh);
+            if (modelGroup) {
+                scene.remove(modelGroup);
+            }
+            modelGroup = new THREE.Group();
             
             const count = particleBaseData.length;
             if (count === 0) return;
@@ -910,7 +916,8 @@
             });
             
             pointsMesh = new THREE.Points(geometry, material);
-            scene.add(pointsMesh);
+            modelGroup.add(pointsMesh);
+            scene.add(modelGroup);
             
             document.getElementById('status').textContent = `${count.toLocaleString()} particles`;
         }
@@ -995,6 +1002,16 @@
                 }
             }
             
+            // Head animation
+            if (headAnimationEnabled && modelGroup) {
+                // Subtle left/right rotation
+                modelGroup.rotation.y = Math.sin(time * 0.3) * 0.15;
+                // Subtle up/down nod
+                modelGroup.rotation.x = Math.sin(time * 0.2) * 0.05;
+                // Subtle forward/back movement
+                modelGroup.position.z = Math.sin(time * 0.15) * 0.1;
+            }
+            
             bloomPass.strength = settings.glow / 100;
             controls.update();
             composer.render();
@@ -1021,6 +1038,20 @@
         // Model selector
         document.getElementById('modelSelect').addEventListener('change', (e) => {
             loadModel(e.target.value);
+        });
+        
+        // Head animation toggle
+        document.getElementById('animateBtn').addEventListener('click', () => {
+            headAnimationEnabled = !headAnimationEnabled;
+            const btn = document.getElementById('animateBtn');
+            btn.textContent = headAnimationEnabled ? '🎭 Stop' : '🎭 Animate';
+            btn.style.background = headAnimationEnabled ? 'rgba(100,255,100,0.3)' : '';
+            
+            // Reset position when stopping
+            if (!headAnimationEnabled && modelGroup) {
+                modelGroup.rotation.set(0, 0, 0);
+                modelGroup.position.set(0, 0, 0);
+            }
         });
         
         // Save defaults

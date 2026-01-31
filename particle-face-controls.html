@@ -479,8 +479,8 @@
                 if (config.depthDensity && fullHead) {
                     // z ranges from ~-0.9 (back) to ~0.9 (front)
                     // More particles at front, fewer at back
-                    depthChance = Math.max(0.1, (z + 1) / 2); // 0.1 at back, 1.0 at front
-                    depthChance = depthChance * depthChance; // Square for more dramatic falloff
+                    depthChance = Math.max(0.02, (z + 1) / 2); // 0.02 at back, 1.0 at front
+                    depthChance = depthChance * depthChance * depthChance; // Cube for dramatic falloff
                 }
                 
                 if (showParticle && Math.random() < depthChance) {
@@ -518,7 +518,7 @@
                     }
                     colors.push(r, g, b);
                     
-                    sizes.push((0.02 + Math.random() * 0.02) * config.particleSize);
+                    sizes.push((0.012 + Math.random() * 0.012) * config.particleSize);
                     types.push(0);
                 }
             }
@@ -646,7 +646,7 @@
             }
             
             // Ambient particles
-            for (let i = 0; i < Math.round(500 * config.density); i++) {
+            for (let i = 0; i < Math.round(300 * config.density); i++) {
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(2 * Math.random() - 1);
                 const r = 2 + Math.random() * 3;
@@ -662,6 +662,43 @@
                 colors.push(ambientColor.r, ambientColor.g, ambientColor.b);
                 sizes.push((0.01 + Math.random() * 0.02) * config.particleSize);
                 types.push(3);
+            }
+            
+            // Flyaway/dispersing particles (scatter from back of head)
+            if (config.depthDensity && fullHead) {
+                const flyawayCount = Math.round(1500 * config.density);
+                for (let i = 0; i < flyawayCount; i++) {
+                    // Start from back hemisphere of head
+                    const phi = Math.acos(1 - Math.random()); // Bias toward back
+                    const theta = Math.PI + (Math.random() - 0.5) * Math.PI; // Back-facing
+                    
+                    // Base position on head surface
+                    const baseX = Math.sin(phi) * Math.cos(theta) * 1.0;
+                    const baseY = (Math.random() - 0.3) * 2.0; // Full height range
+                    const baseZ = -0.5 - Math.random() * 0.5; // Behind the head
+                    
+                    // Scatter outward
+                    const scatter = Math.random() * Math.random() * 2.5; // Squared for clustering near head
+                    const scatterAngle = Math.random() * Math.PI * 2;
+                    const scatterY = (Math.random() - 0.5) * 1.5;
+                    
+                    const x = baseX + Math.cos(scatterAngle) * scatter * 0.5;
+                    const y = baseY + scatterY * scatter * 0.3;
+                    const z = baseZ - scatter; // Scatter backward
+                    
+                    points.push(x, y, z);
+                    originalPos.push(x, y, z);
+                    
+                    // Fade color with distance
+                    const fadeFactor = Math.max(0.3, 1 - scatter / 2.5);
+                    const flyColor = config.colorPrimary.clone().multiplyScalar(fadeFactor);
+                    colors.push(flyColor.r, flyColor.g, flyColor.b);
+                    
+                    // Smaller particles as they scatter
+                    const sizeFactor = Math.max(0.4, 1 - scatter / 3);
+                    sizes.push((0.01 + Math.random() * 0.015) * config.particleSize * sizeFactor);
+                    types.push(3); // Treat as ambient
+                }
             }
             
             return { points, colors, sizes, originalPositions: originalPos, types };

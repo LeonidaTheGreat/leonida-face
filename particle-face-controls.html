@@ -444,8 +444,117 @@
         let lastFpsUpdate = performance.now();
         
         // ============================================
-        // FACE GENERATION
+        // FACE GENERATION - Contour-based stipple approach
         // ============================================
+        
+        // Helper: get skull radius at a given height (y) and angle (theta)
+        function getSkullRadius(y, theta, faceType) {
+            // Normalized height (-1 = chin, 0 = eye level, 1 = top of head)
+            const h = y / 1.3;
+            
+            // Base skull shape - narrower at jaw, wider at temples, narrower at top
+            let baseRadius;
+            if (h < -0.5) {
+                // Jaw/chin area - narrow, pointed
+                baseRadius = 0.4 + (h + 1) * 0.5;
+            } else if (h < 0) {
+                // Lower face - cheeks widen
+                baseRadius = 0.65 + h * 0.1;
+            } else if (h < 0.3) {
+                // Mid face - widest at temples/cheekbones
+                baseRadius = 0.7 - Math.abs(h - 0.15) * 0.2;
+            } else if (h < 0.7) {
+                // Forehead - gradually narrows
+                baseRadius = 0.65 - (h - 0.3) * 0.3;
+            } else {
+                // Top of head - dome
+                baseRadius = 0.5 - (h - 0.7) * 0.5;
+            }
+            
+            // Front-back asymmetry (face is flatter than back of head)
+            const zFactor = Math.cos(theta);
+            if (zFactor > 0) {
+                // Front face - flatter
+                baseRadius *= 0.85 + zFactor * 0.15;
+            } else {
+                // Back of head - rounder
+                baseRadius *= 1.0 - zFactor * 0.1;
+            }
+            
+            return baseRadius;
+        }
+        
+        // Helper: calculate surface curvature (high curvature = edges/features)
+        function estimateCurvature(x, y, z, faceType) {
+            let curvature = 0;
+            
+            const h = y / 1.3;
+            const fx = x;
+            
+            // Brow ridge
+            if (h > 0.1 && h < 0.35 && z > 0.3) {
+                const browProximity = 1 - Math.abs(h - 0.22) * 5;
+                curvature += Math.max(0, browProximity) * 0.8;
+            }
+            
+            // Eye socket edges
+            const eyeSpread = 0.32;
+            const leftEyeDist = Math.sqrt((fx + eyeSpread) ** 2 + (h - 0.12) ** 2);
+            const rightEyeDist = Math.sqrt((fx - eyeSpread) ** 2 + (h - 0.12) ** 2);
+            const eyeDist = Math.min(leftEyeDist, rightEyeDist);
+            if (eyeDist < 0.2 && eyeDist > 0.08) {
+                curvature += (0.2 - eyeDist) * 3; // Edge of eye socket
+            }
+            
+            // Nose bridge and edge
+            if (Math.abs(fx) < 0.15 && h > -0.25 && h < 0.15 && z > 0.4) {
+                const noseEdge = Math.abs(Math.abs(fx) - 0.06);
+                curvature += Math.max(0, 0.08 - noseEdge) * 8;
+            }
+            
+            // Nose tip
+            if (Math.abs(fx) < 0.1 && h > -0.25 && h < -0.1 && z > 0.5) {
+                curvature += 0.6;
+            }
+            
+            // Nostril edges
+            if (Math.abs(fx) > 0.03 && Math.abs(fx) < 0.12 && h > -0.3 && h < -0.15) {
+                curvature += 0.4;
+            }
+            
+            // Cheekbone
+            if (Math.abs(fx) > 0.35 && Math.abs(fx) < 0.55 && h > -0.15 && h < 0.1 && z > 0.2) {
+                curvature += 0.5;
+            }
+            
+            // Lips
+            if (Math.abs(fx) < 0.2 && h > -0.5 && h < -0.35 && z > 0.4) {
+                const lipEdge = Math.abs(h + 0.42);
+                curvature += Math.max(0, 0.06 - lipEdge) * 10;
+            }
+            
+            // Jaw line
+            if (h < -0.4 && h > -0.8 && Math.abs(fx) > 0.2) {
+                const jawY = -0.5 - Math.abs(fx) * 0.4;
+                const jawDist = Math.abs(h - jawY);
+                if (jawDist < 0.1) {
+                    curvature += (0.1 - jawDist) * 5;
+                }
+            }
+            
+            // Chin
+            if (h < -0.6 && Math.abs(fx) < 0.15 && z > 0.3) {
+                curvature += 0.5;
+            }
+            
+            // Silhouette edge (where surface turns away)
+            if (Math.abs(z) < 0.2 && z > -0.1) {
+                curvature += 0.6; // Profile edge
+            }
+            
+            return curvature;
+        }
+        
         function generateFacePoints(faceType = 'human', fullHead = false) {
             const points = [];
             const colors = [];
@@ -453,120 +562,82 @@
             const originalPos = [];
             const types = []; // 0=face, 1=eye, 2=upperMouth, 3=ambient, 4=mane, 5=lowerMouth/jaw
             
-            const baseCount = Math.round(12000 * config.density); // High density for stippled look
+            const baseCount = Math.round(25000 * config.density); // More particles, filtered by curvature
             
-            // Head shape
+            // Generate head surface points
             for (let i = 0; i < baseCount; i++) {
-                const phi = Math.acos(1 - 2 * (i + 0.5) / baseCount);
-                const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+                // Random point on unit sphere, then deform to skull shape
+                const u = Math.random();
+                const v = Math.random();
+                const theta = 2 * Math.PI * u;
+                const phi = Math.acos(2 * v - 1);
                 
-                let x = Math.sin(phi) * Math.cos(theta) * 1.0;
-                let y = Math.cos(phi) * (faceType === 'lion' ? 1.1 : 1.3);
-                let z = Math.sin(phi) * Math.sin(theta) * 0.9;
+                // Height on head
+                const y = Math.cos(phi) * 1.3;
                 
-                // Lion has broader face, snout
-                if (faceType === 'lion' || faceType === 'humanLion') {
-                    // Wider cheeks
-                    if (y < 0 && y > -0.5) {
-                        x *= 1.2;
-                    }
-                    // Snout protrusion
-                    if (y < 0.1 && y > -0.4 && Math.abs(x) < 0.3) {
-                        z += 0.2 * (1 - Math.abs(y) * 2);
-                    }
+                // Get skull radius at this position
+                const radius = getSkullRadius(y, theta, faceType);
+                
+                let x = Math.sin(phi) * Math.cos(theta) * radius;
+                let z = Math.sin(phi) * Math.sin(theta) * radius * 0.9;
+                
+                // Skip back of head if not fullHead
+                if (!fullHead && z < -0.1) continue;
+                
+                // Apply facial feature sculpting
+                const h = y / 1.3;
+                
+                // Brow ridge protrusion
+                if (h > 0.1 && h < 0.3 && z > 0.3 && Math.abs(x) < 0.5) {
+                    const browAmount = Math.max(0, 1 - Math.abs(h - 0.2) * 8) * (1 - Math.abs(x) * 1.5);
+                    z += browAmount * 0.08;
                 }
                 
-                // Filter based on headDepth
-                const showParticle = fullHead ? true : z > -0.3;
+                // Eye socket depression
+                const eyeSpread = 0.32;
+                const leftEyeDist = Math.sqrt((x + eyeSpread) ** 2 + (h - 0.12) ** 2);
+                const rightEyeDist = Math.sqrt((x - eyeSpread) ** 2 + (h - 0.12) ** 2);
+                if (leftEyeDist < 0.15) z -= (0.15 - leftEyeDist) * 0.6;
+                if (rightEyeDist < 0.15) z -= (0.15 - rightEyeDist) * 0.6;
                 
-                // Depth-based density: particles at back have lower chance of appearing
+                // Nose protrusion
+                if (Math.abs(x) < 0.1 && h > -0.25 && h < 0.1) {
+                    const noseProfile = Math.max(0, 1 - Math.abs(h + 0.05) * 4);
+                    z += noseProfile * 0.2 * (1 - Math.abs(x) * 8);
+                }
+                
+                // Cheekbone
+                if (Math.abs(x) > 0.3 && Math.abs(x) < 0.5 && h > -0.1 && h < 0.15) {
+                    z += 0.05;
+                }
+                
+                // Mouth area - slight depression
+                if (Math.abs(x) < 0.2 && h > -0.5 && h < -0.35) {
+                    z -= 0.03;
+                }
+                
+                // Calculate curvature for density
+                const curvature = estimateCurvature(x, y, z, faceType);
+                
+                // Depth-based density
                 let depthChance = 1.0;
                 if (config.depthDensity && fullHead) {
-                    // z ranges from ~-0.9 (back) to ~0.9 (front)
-                    // More particles at front, fewer at back
-                    depthChance = Math.max(0.02, (z + 1) / 2); // 0.02 at back, 1.0 at front
-                    depthChance = depthChance * depthChance * depthChance; // Cube for dramatic falloff
+                    depthChance = Math.max(0.02, (z + 0.6) / 1.2);
+                    depthChance = depthChance * depthChance;
                 }
                 
-                // Feature-based density: denser near eyes, nose, mouth, eyebrows
-                const faceY = y / 1.3;
-                const faceX = x / 1.0;
-                const eyeSpreadF = faceType === 'lion' ? 0.4 : 0.35;
+                // Curvature-based density: high curvature = keep, low curvature = sparse
+                const baseDensity = 0.08; // Baseline for flat areas
+                const curvatureBoost = Math.min(1, curvature * 1.5);
+                const keepChance = baseDensity + curvatureBoost * (1 - baseDensity);
                 
-                // Distance to left/right eyes
-                const leftEyeDist = Math.sqrt((faceX + eyeSpreadF) ** 2 + (faceY - 0.15) ** 2);
-                const rightEyeDist = Math.sqrt((faceX - eyeSpreadF) ** 2 + (faceY - 0.15) ** 2);
-                const eyeDist = Math.min(leftEyeDist, rightEyeDist);
+                const finalChance = depthChance * keepChance;
                 
-                // Distance to nose (bridge and tip)
-                const noseBridgeDist = Math.sqrt(faceX ** 2 + (faceY - 0.05) ** 2);
-                const noseTipDist = Math.sqrt(faceX ** 2 + (faceY + 0.15) ** 2);
-                const noseDist = Math.min(noseBridgeDist, noseTipDist);
-                
-                // Distance to mouth
-                const mouthDist = Math.sqrt((faceX / 1.5) ** 2 + (faceY + 0.38) ** 2);
-                
-                // Distance to eyebrows
-                const leftBrowDist = Math.sqrt((faceX + eyeSpreadF) ** 2 + (faceY - 0.32) ** 2);
-                const rightBrowDist = Math.sqrt((faceX - eyeSpreadF) ** 2 + (faceY - 0.32) ** 2);
-                const browDist = Math.min(leftBrowDist, rightBrowDist);
-                
-                // Distance to jaw/chin line
-                const jawDist = Math.abs(faceY + 0.7) + Math.abs(faceX) * 0.3;
-                
-                // Find closest feature
-                const minFeatureDist = Math.min(eyeDist, noseDist * 1.2, mouthDist, browDist * 1.3, jawDist * 0.5);
-                
-                // Feature density: closer to feature = higher chance
-                // 0.15 = very close to feature, 0.5 = far from features
-                let featureChance = 1.0;
-                if (config.depthDensity && z > 0) { // Only apply to front face
-                    if (minFeatureDist < 0.3) {
-                        featureChance = 1.0; // Keep all particles near features
-                    } else {
-                        // Falloff for particles away from features
-                        featureChance = Math.max(0.15, 1.0 - (minFeatureDist - 0.3) * 1.5);
-                    }
-                }
-                
-                const finalChance = depthChance * featureChance;
-                
-                if (showParticle && Math.random() < finalChance) {
-                    // Sculpt face features
-                    const faceY = y / 1.3;
-                    const faceX = x / 1.0;
-                    
-                    // Eye sockets
-                    const eyeSpread = faceType === 'lion' ? 0.4 : 0.35;
-                    const leftEyeDist = Math.sqrt((faceX + eyeSpread) ** 2 + (faceY - 0.15) ** 2);
-                    const rightEyeDist = Math.sqrt((faceX - eyeSpread) ** 2 + (faceY - 0.15) ** 2);
-                    if (leftEyeDist < 0.2) z -= (0.2 - leftEyeDist) * 0.5;
-                    if (rightEyeDist < 0.2) z -= (0.2 - rightEyeDist) * 0.5;
-                    
-                    // Nose
-                    const noseDist = Math.sqrt(faceX ** 2 + (faceY + 0.1) ** 2);
-                    if (noseDist < 0.15 && faceY > -0.2) z += (0.15 - noseDist) * 0.8;
-                    
-                    // Mouth
-                    const mouthDist = Math.sqrt(faceX ** 2 + (faceY + 0.35) ** 2);
-                    if (mouthDist < 0.2 && Math.abs(faceX) < 0.25) z -= 0.05;
-                    
+                if (Math.random() < finalChance) {
                     points.push(x, y, z);
                     originalPos.push(x, y, z);
-                    
-                    // Colors
-                    let r = config.colorPrimary.r;
-                    let g = config.colorPrimary.g;
-                    let b = config.colorPrimary.b;
-                    
-                    if (leftEyeDist < 0.15 || rightEyeDist < 0.15) {
-                        r = config.colorSecondary.r;
-                        g = config.colorSecondary.g;
-                        b = config.colorSecondary.b;
-                    }
-                    colors.push(r, g, b);
-                    
-                    sizes.push((0.012 + Math.random() * 0.012) * config.particleSize);
+                    colors.push(config.colorPrimary.r, config.colorPrimary.g, config.colorPrimary.b);
+                    sizes.push((0.008 + Math.random() * 0.008 + curvature * 0.005) * config.particleSize);
                     types.push(0);
                 }
             }

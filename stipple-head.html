@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leonida - Stipple Head</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #f5f5f5;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #333;
+        }
+        #container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        .status {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8em;
+            color: rgba(0, 0, 0, 0.4);
+            letter-spacing: 0.1em;
+            z-index: 10;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls input[type="range"] {
+            width: 150px;
+        }
+        .controls label {
+            font-size: 0.75em;
+            color: rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .controls select {
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div class="status" id="status">Loading model...</div>
+    
+    <div class="controls">
+        <label>Back Dissipation
+            <input type="range" id="dissipation" min="0" max="100" value="70">
+        </label>
+        <label>Particle Density
+            <input type="range" id="density" min="10" max="100" value="50">
+        </label>
+        <label>Particle Size
+            <input type="range" id="size" min="1" max="20" value="6">
+        </label>
+        <label>Background
+            <select id="background">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+            </select>
+        </label>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        
+        // Scene setup
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf5f5f5);
+        
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 3);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+        
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 1;
+        controls.maxDistance = 10;
+        
+        // State
+        let pointsMesh = null;
+        let allVertices = [];
+        let dissipationAmount = 0.7;
+        let densityAmount = 0.5;
+        let particleSizeValue = 6;
+        let isDark = false;
+        
+        // Load head model
+        const loader = new OBJLoader();
+        const modelUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/walt/WaltHead.obj';
+        
+        loader.load(modelUrl, (obj) => {
+            document.getElementById('status').textContent = 'Processing...';
+            
+            // Extract vertices
+            let vertices = [];
+            
+            obj.traverse((child) => {
+                if (child.isMesh && child.geometry) {
+                    const positions = child.geometry.attributes.position;
+                    const normals = child.geometry.attributes.normal;
+                    
+                    for (let i = 0; i < positions.count; i++) {
+                        vertices.push({
+                            x: positions.getX(i),
+                            y: positions.getY(i),
+                            z: positions.getZ(i),
+                            nx: normals ? normals.getX(i) : 0,
+                            ny: normals ? normals.getY(i) : 0,
+                            nz: normals ? normals.getZ(i) : 1
+                        });
+                    }
+                }
+            });
+            
+            // Normalize and center
+            const bounds = {
+                minX: Infinity, maxX: -Infinity,
+                minY: Infinity, maxY: -Infinity,
+                minZ: Infinity, maxZ: -Infinity
+            };
+            
+            vertices.forEach(v => {
+                bounds.minX = Math.min(bounds.minX, v.x);
+                bounds.maxX = Math.max(bounds.maxX, v.x);
+                bounds.minY = Math.min(bounds.minY, v.y);
+                bounds.maxY = Math.max(bounds.maxY, v.y);
+                bounds.minZ = Math.min(bounds.minZ, v.z);
+                bounds.maxZ = Math.max(bounds.maxZ, v.z);
+            });
+            
+            const centerX = (bounds.minX + bounds.maxX) / 2;
+            const centerY = (bounds.minY + bounds.maxY) / 2;
+            const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+            const scale = 2 / Math.max(
+                bounds.maxX - bounds.minX,
+                bounds.maxY - bounds.minY,
+                bounds.maxZ - bounds.minZ
+            );
+            
+            allVertices = vertices.map(v => ({
+                x: (v.x - centerX) * scale,
+                y: (v.y - centerY) * scale,
+                z: (v.z - centerZ) * scale,
+                nx: v.nx,
+                ny: v.ny,
+                nz: v.nz
+            }));
+            
+            createStippleHead();
+            
+        }, (progress) => {
+            if (progress.total) {
+                const pct = Math.round(progress.loaded / progress.total * 100);
+                document.getElementById('status').textContent = `Loading... ${pct}%`;
+            }
+        }, (error) => {
+            console.error('Error:', error);
+            document.getElementById('status').textContent = 'Error loading model';
+        });
+        
+        function createStippleHead() {
+            if (pointsMesh) scene.remove(pointsMesh);
+            
+            // Filter vertices based on density and dissipation
+            let filtered = allVertices.filter((v, i) => {
+                // Base density sampling
+                if (Math.random() > densityAmount) return false;
+                
+                // Back dissipation - z < 0 is back of head
+                if (v.z < 0) {
+                    const backFactor = Math.abs(v.z); // 0 at center, ~1 at back
+                    const keepChance = Math.pow(1 - backFactor * dissipationAmount, 2);
+                    return Math.random() < keepChance;
+                }
+                
+                // Front face - also consider surface angle
+                // Edges (where normal points sideways) get more particles
+                const edgeFactor = 1 - Math.abs(v.nz);
+                const edgeBonus = edgeFactor * 0.3;
+                
+                return Math.random() < (1 + edgeBonus);
+            });
+            
+            // Create point cloud
+            const positions = new Float32Array(filtered.length * 3);
+            const sizes = new Float32Array(filtered.length);
+            
+            for (let i = 0; i < filtered.length; i++) {
+                const v = filtered[i];
+                positions[i * 3] = v.x;
+                positions[i * 3 + 1] = v.y;
+                positions[i * 3 + 2] = v.z;
+                
+                // Vary size slightly, smaller toward back
+                const depthFactor = (v.z + 1) / 2;
+                sizes[i] = particleSizeValue * (0.5 + depthFactor * 0.5) * (0.8 + Math.random() * 0.4);
+            }
+            
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            
+            // Shader for round points with size attenuation
+            const material = new THREE.ShaderMaterial({
+                uniforms: {
+                    color: { value: new THREE.Color(isDark ? 0xffffff : 0x000000) },
+                    opacity: { value: isDark ? 0.9 : 0.85 }
+                },
+                vertexShader: `
+                    attribute float size;
+                    varying float vAlpha;
+                    
+                    void main() {
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = size * (300.0 / -mvPosition.z);
+                        gl_Position = projectionMatrix * mvPosition;
+                        
+                        // Fade slightly with depth
+                        vAlpha = 0.7 + (position.z + 1.0) * 0.15;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 color;
+                    uniform float opacity;
+                    varying float vAlpha;
+                    
+                    void main() {
+                        // Round point
+                        vec2 center = gl_PointCoord - 0.5;
+                        float dist = length(center);
+                        if (dist > 0.5) discard;
+                        
+                        // Soft edge
+                        float alpha = smoothstep(0.5, 0.3, dist) * opacity * vAlpha;
+                        gl_FragColor = vec4(color, alpha);
+                    }
+                `,
+                transparent: true,
+                depthWrite: false
+            });
+            
+            pointsMesh = new THREE.Points(geometry, material);
+            scene.add(pointsMesh);
+            
+            document.getElementById('status').textContent = `${filtered.length.toLocaleString()} particles`;
+        }
+        
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Controls
+        document.getElementById('dissipation').addEventListener('input', (e) => {
+            dissipationAmount = e.target.value / 100;
+            createStippleHead();
+        });
+        
+        document.getElementById('density').addEventListener('input', (e) => {
+            densityAmount = e.target.value / 100;
+            createStippleHead();
+        });
+        
+        document.getElementById('size').addEventListener('input', (e) => {
+            particleSizeValue = parseFloat(e.target.value);
+            createStippleHead();
+        });
+        
+        document.getElementById('background').addEventListener('change', (e) => {
+            isDark = e.target.value === 'dark';
+            scene.background = new THREE.Color(isDark ? 0x1a1a2e : 0xf5f5f5);
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.color.value = new THREE.Color(isDark ? 0xffffff : 0x000000);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -330,6 +330,10 @@
                 <button class="btn" id="disassembleBtn">Disassemble</button>
             </div>
             <div class="btn-row" style="margin-top: 8px;">
+                <button class="btn active" id="constellationBtn">Constellation</button>
+                <button class="btn active" id="depthDensityBtn">Depth Density</button>
+            </div>
+            <div class="btn-row" style="margin-top: 8px;">
                 <button class="btn" id="resetBtn">Reset All</button>
                 <button class="btn" id="randomBtn">Randomize</button>
             </div>
@@ -370,7 +374,10 @@
             glowIntensity: 1.0,          // bloom strength multiplier
             headDepth: 'front',          // front | full
             autoRotate: 'off',           // off | slow | medium
-            assembled: true              // assembly state
+            assembled: true,             // assembly state
+            showConstellation: true,     // constellation lines visible
+            constellationOpacity: 1.0,   // for animation
+            depthDensity: true           // denser particles at front
         };
         
         // Color presets
@@ -423,7 +430,7 @@
         let speakIntensity = 0;
         let targetLookAt = new THREE.Vector3(0, 0, 1);
         let currentLookAt = new THREE.Vector3(0, 0, 1);
-        let particles, lines, geometry, lineGeometry;
+        let particles, lines, geometry, lineGeometry, lineMaterial;
         let originalPositions, particleTypes, targetPositions;
         let assemblyProgress = 1; // 0 = scattered, 1 = assembled
         
@@ -467,7 +474,16 @@
                 // Filter based on headDepth
                 const showParticle = fullHead ? true : z > -0.3;
                 
-                if (showParticle) {
+                // Depth-based density: particles at back have lower chance of appearing
+                let depthChance = 1.0;
+                if (config.depthDensity && fullHead) {
+                    // z ranges from ~-0.9 (back) to ~0.9 (front)
+                    // More particles at front, fewer at back
+                    depthChance = Math.max(0.1, (z + 1) / 2); // 0.1 at back, 1.0 at front
+                    depthChance = depthChance * depthChance; // Square for more dramatic falloff
+                }
+                
+                if (showParticle && Math.random() < depthChance) {
                     // Sculpt face features
                     const faceY = y / 1.3;
                     const faceX = x / 1.0;
@@ -761,10 +777,10 @@
             lineGeometry = new THREE.BufferGeometry();
             lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
             
-            const lineMaterial = new THREE.LineBasicMaterial({
+            lineMaterial = new THREE.LineBasicMaterial({
                 color: config.colorPrimary,
                 transparent: true,
-                opacity: 0.15,
+                opacity: config.showConstellation ? 0.15 * config.constellationOpacity : 0,
                 blending: THREE.AdditiveBlending
             });
             
@@ -777,6 +793,7 @@
         // ============================================
         function disassemble() {
             config.assembled = false;
+            config.constellationOpacity = 0; // Fade out constellation
             // Scatter target positions
             for (let i = 0; i < targetPositions.length; i += 3) {
                 const direction = new THREE.Vector3(
@@ -795,6 +812,7 @@
         
         function assemble() {
             config.assembled = true;
+            config.constellationOpacity = 1; // Fade in constellation
             // Reset target positions to original
             for (let i = 0; i < targetPositions.length; i++) {
                 targetPositions[i] = originalPositions[i];
@@ -851,6 +869,12 @@
                     positions[i] += (targetPositions[i] - positions[i]) * 0.05;
                 }
                 geometry.attributes.position.needsUpdate = true;
+            }
+            
+            // Animate constellation opacity
+            if (lineMaterial) {
+                const targetOpacity = config.showConstellation ? 0.15 * config.constellationOpacity : 0;
+                lineMaterial.opacity += (targetOpacity - lineMaterial.opacity) * 0.05;
             }
             
             // Update bloom
@@ -961,6 +985,19 @@
             // Action buttons
             document.getElementById('assembleBtn').addEventListener('click', assemble);
             document.getElementById('disassembleBtn').addEventListener('click', disassemble);
+            
+            // Constellation toggle
+            document.getElementById('constellationBtn').addEventListener('click', (e) => {
+                config.showConstellation = !config.showConstellation;
+                e.target.classList.toggle('active', config.showConstellation);
+            });
+            
+            // Depth density toggle
+            document.getElementById('depthDensityBtn').addEventListener('click', (e) => {
+                config.depthDensity = !config.depthDensity;
+                e.target.classList.toggle('active', config.depthDensity);
+                createParticleSystem(); // Rebuild to apply
+            });
             
             document.getElementById('resetBtn').addEventListener('click', () => {
                 location.reload();

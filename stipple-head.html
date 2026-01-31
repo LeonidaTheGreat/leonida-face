@@ -164,6 +164,16 @@
         </div>
         
         <div class="slider-row">
+            <label>Volume vs Surface (0 = surface only)</label>
+            <input type="range" id="volumeDensity" min="0" max="100" value="0">
+            <div class="range-inputs">
+                <input type="number" id="volumeDensityMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="volumeDensityMax" value="100">
+            </div>
+        </div>
+        
+        <div class="slider-row">
             <label>Shape</label>
             <select id="shape">
                 <option value="circle">Circle</option>
@@ -333,6 +343,9 @@
             density: 90,
             densityMin: 1,
             densityMax: 200,
+            volumeDensity: 0,
+            volumeDensityMin: 0,
+            volumeDensityMax: 100,
             shape: 'soft',
             reference: 'camera',
             effectStart: 90,
@@ -381,6 +394,12 @@
             document.getElementById('density').max = settings.densityMax;
             document.getElementById('densityMin').value = settings.densityMin;
             document.getElementById('densityMax').value = settings.densityMax;
+            
+            document.getElementById('volumeDensity').value = settings.volumeDensity;
+            document.getElementById('volumeDensity').min = settings.volumeDensityMin;
+            document.getElementById('volumeDensity').max = settings.volumeDensityMax;
+            document.getElementById('volumeDensityMin').value = settings.volumeDensityMin;
+            document.getElementById('volumeDensityMax').value = settings.volumeDensityMax;
             
             document.getElementById('shape').value = settings.shape;
             document.getElementById('reference').value = settings.reference;
@@ -467,13 +486,63 @@
                 z: (v.z - cz) * scale
             }));
             
+            // Calculate surface detection data
+            // For each vertex, compute its "surfaceness" (how close to outer shell)
+            computeSurfaceData();
+            
             applySettingsToUI();
             initParticles();
+        });
+        
+        let vertexSurfaceScore = []; // 0 = interior, 1 = surface
+        
+        function computeSurfaceData() {
+            // Bin vertices by angle and find max radius per bin
+            const bins = 64; // angular resolution
+            const maxRadius = {};
+            
+            // Initialize bins
+            for (let ay = 0; ay < bins; ay++) {
+                for (let ax = 0; ax < bins; ax++) {
+                    maxRadius[`${ax}_${ay}`] = 0;
+                }
+            }
+            
+            // Find max radius for each angular bin
+            for (const v of allVertices) {
+                const r = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+                const theta = Math.atan2(v.z, v.x); // -PI to PI
+                const phi = Math.acos(v.y / (r + 0.0001)); // 0 to PI
+                
+                const ax = Math.floor((theta + Math.PI) / (2 * Math.PI) * bins) % bins;
+                const ay = Math.floor(phi / Math.PI * bins) % bins;
+                const key = `${ax}_${ay}`;
+                
+                if (r > maxRadius[key]) {
+                    maxRadius[key] = r;
+                }
+            }
+            
+            // Score each vertex by how close it is to the max radius for its bin
+            vertexSurfaceScore = allVertices.map(v => {
+                const r = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+                const theta = Math.atan2(v.z, v.x);
+                const phi = Math.acos(v.y / (r + 0.0001));
+                
+                const ax = Math.floor((theta + Math.PI) / (2 * Math.PI) * bins) % bins;
+                const ay = Math.floor(phi / Math.PI * bins) % bins;
+                const key = `${ax}_${ay}`;
+                
+                const maxR = maxRadius[key] || 1;
+                // Score: 1 if at max radius, 0 if at center
+                return maxR > 0 ? r / maxR : 1;
+            });
         });
         
         function initParticles() {
             // Density: 100 = all original vertices, 200 = 2x oversampling, etc.
             const densityFactor = settings.density / 100;
+            const volumeThreshold = settings.volumeDensity / 100; // 0 = surface only, 1 = include all
             
             particleBaseData = [];
             
@@ -488,20 +557,29 @@
                     // For partial passes, randomly include
                     if (isLastPass && Math.random() > lastPassChance) continue;
                     
+                    // Surface vs Volume filtering
+                    // surfaceScore: 1 = on surface, <1 = interior
+                    const surfaceScore = vertexSurfaceScore[i] || 1;
+                    const surfaceThreshold = 0.85; // Consider "surface" if > 85% of max radius
+                    
+                    if (surfaceScore < surfaceThreshold) {
+                        // This is an interior vertex
+                        // Only keep if volumeDensity allows it
+                        const interiorChance = volumeThreshold * surfaceScore;
+                        if (Math.random() > interiorChance) continue;
+                    }
+                    
                     const v = allVertices[i];
                     let x = v.x, y = v.y, z = v.z;
                     
                     // For oversampled passes (pass > 0), interpolate with a nearby vertex
-                    // This spreads particles across the surface, not off it
                     if (pass > 0) {
-                        // Pick a random nearby vertex (within ~5% of total vertices for locality)
                         const searchRange = Math.max(10, Math.floor(allVertices.length * 0.02));
                         const offset = Math.floor(Math.random() * searchRange) - Math.floor(searchRange / 2);
                         const neighborIdx = Math.max(0, Math.min(allVertices.length - 1, i + offset));
                         const neighbor = allVertices[neighborIdx];
                         
-                        // Interpolate between current vertex and neighbor (stay on surface approx)
-                        const t = Math.random() * 0.5; // 0-50% toward neighbor
+                        const t = Math.random() * 0.5;
                         x = v.x + (neighbor.x - v.x) * t;
                         y = v.y + (neighbor.y - v.y) * t;
                         z = v.z + (neighbor.z - v.z) * t;
@@ -748,6 +826,9 @@
             settings.density = parseFloat(document.getElementById('density').value);
             settings.densityMin = parseFloat(document.getElementById('densityMin').value);
             settings.densityMax = parseFloat(document.getElementById('densityMax').value);
+            settings.volumeDensity = parseFloat(document.getElementById('volumeDensity').value);
+            settings.volumeDensityMin = parseFloat(document.getElementById('volumeDensityMin').value);
+            settings.volumeDensityMax = parseFloat(document.getElementById('volumeDensityMax').value);
             settings.shape = document.getElementById('shape').value;
             settings.reference = document.getElementById('reference').value;
             settings.effectStart = parseFloat(document.getElementById('effectStart').value);
@@ -810,6 +891,7 @@
         
         setupSlider('size', 'size', true, false);
         setupSlider('density', 'density', true, false);
+        setupSlider('volumeDensity', 'volumeDensity', true, false);
         setupSlider('effectStart', 'effectStart', false, true);
         setupSlider('dissipation', 'dissipation', false, true);
         setupSlider('floatAway', 'floatAway', false, true);

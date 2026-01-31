@@ -448,8 +448,8 @@
                     // For partial passes, randomly include
                     if (isLastPass && Math.random() > lastPassChance) continue;
                     
-                    // Add slight jitter for oversampled particles to avoid exact overlap
-                    const jitter = pass > 0 ? 0.01 : 0;
+                    // Add jitter - more for oversampled passes to spread them out
+                    const jitter = 0.015 + (pass * 0.025); // Base jitter + more per pass
                     
                     particleBaseData.push({
                         x: v.x + (Math.random() - 0.5) * jitter,

@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leonida - 3D Particle Entity</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #fff;
+        }
+        #container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        .ui {
+            position: fixed;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .ui > * { pointer-events: auto; }
+        
+        .header {
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2em;
+            font-weight: 300;
+            letter-spacing: 0.3em;
+            background: linear-gradient(90deg, #00d4ff, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .chat-panel {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(500px, 90vw);
+            background: rgba(0, 10, 20, 0.85);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+        }
+        .messages {
+            max-height: 80px;
+            overflow-y: auto;
+            margin-bottom: 12px;
+        }
+        .msg {
+            margin: 6px 0;
+            padding: 8px 14px;
+            border-radius: 12px;
+            font-size: 0.9em;
+        }
+        .msg.bot {
+            background: rgba(0, 212, 255, 0.1);
+            border-left: 2px solid #00d4ff;
+        }
+        .msg.user {
+            background: rgba(168, 85, 247, 0.15);
+            margin-left: auto;
+            max-width: 80%;
+            text-align: right;
+        }
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        input {
+            flex: 1;
+            padding: 12px 18px;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 25px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            font-size: 0.95em;
+            outline: none;
+        }
+        input:focus {
+            border-color: #00d4ff;
+        }
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #00d4ff, #a855f7);
+            border: none;
+            border-radius: 25px;
+            color: #fff;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: scale(1.05); }
+        
+        .controls {
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .controls button {
+            padding: 10px 16px;
+            background: rgba(0, 212, 255, 0.15);
+            font-size: 0.85em;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+        }
+        
+        .status {
+            bottom: 145px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8em;
+            color: rgba(0, 212, 255, 0.6);
+            letter-spacing: 0.1em;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    
+    <div class="ui header">
+        <h1>LEONIDA</h1>
+    </div>
+    
+    <div class="ui controls">
+        <button onclick="setMood('neutral')">Neutral</button>
+        <button onclick="setMood('happy')">Happy</button>
+        <button onclick="setMood('thinking')">Thinking</button>
+        <button onclick="speak()">Speak</button>
+    </div>
+    
+    <div class="ui status" id="status">Initializing...</div>
+    
+    <div class="ui chat-panel">
+        <div class="messages" id="messages">
+            <div class="msg bot">I am Leonida. Speak, and I shall listen.</div>
+        </div>
+        <div class="input-row">
+            <input type="text" id="input" placeholder="Say something..." />
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        
+        // Scene setup
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000510, 0.02);
+        
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 5);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setClearColor(0x000510);
+        container.appendChild(renderer.domElement);
+        
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5, // strength
+            0.4, // radius
+            0.85 // threshold
+        );
+        composer.addPass(bloomPass);
+        
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.enableZoom = true;
+        controls.minDistance = 2;
+        controls.maxDistance = 10;
+        controls.autoRotate = false;
+        controls.autoRotateSpeed = 0.5;
+        
+        // State
+        let time = 0;
+        let mood = 'neutral';
+        let isSpeaking = false;
+        let speakIntensity = 0;
+        let targetLookAt = new THREE.Vector3(0, 0, 1);
+        let currentLookAt = new THREE.Vector3(0, 0, 1);
+        
+        // Simplex noise approximation
+        function noise3D(x, y, z) {
+            const p = x * 12.9898 + y * 78.233 + z * 37.719;
+            return (Math.sin(p) * 43758.5453) % 1;
+        }
+        
+        function smoothNoise(x, y, z, t) {
+            return Math.sin(x * 1.5 + t) * Math.cos(y * 1.3 + t * 0.7) * Math.sin(z * 1.1 + t * 0.5) * 0.5 +
+                   Math.sin(x * 2.1 + t * 1.3) * Math.cos(y * 1.7 + t) * 0.3 +
+                   Math.sin(z * 1.9 + t * 0.9) * 0.2;
+        }
+        
+        // Generate face point cloud
+        function generateFacePoints() {
+            const points = [];
+            const colors = [];
+            const sizes = [];
+            const originalPositions = [];
+            const types = []; // 0=face, 1=eye, 2=mouth, 3=ambient
+            
+            // Head shape - ellipsoid
+            const headParticles = 3000;
+            for (let i = 0; i < headParticles; i++) {
+                // Fibonacci sphere distribution
+                const phi = Math.acos(1 - 2 * (i + 0.5) / headParticles);
+                const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+                
+                // Ellipsoid shape (head proportions)
+                let x = Math.sin(phi) * Math.cos(theta) * 1.0;
+                let y = Math.cos(phi) * 1.3; // Taller
+                let z = Math.sin(phi) * Math.sin(theta) * 0.9; // Slightly narrow
+                
+                // Only front-ish particles (face area)
+                if (z > -0.3) {
+                    // Sculpt face features
+                    const faceY = y / 1.3;
+                    const faceX = x / 1.0;
+                    
+                    // Eye sockets (indent)
+                    const leftEyeDist = Math.sqrt((faceX + 0.35) ** 2 + (faceY - 0.15) ** 2);
+                    const rightEyeDist = Math.sqrt((faceX - 0.35) ** 2 + (faceY - 0.15) ** 2);
+                    if (leftEyeDist < 0.2) z -= (0.2 - leftEyeDist) * 0.5;
+                    if (rightEyeDist < 0.2) z -= (0.2 - rightEyeDist) * 0.5;
+                    
+                    // Nose (protrude)
+                    const noseDist = Math.sqrt(faceX ** 2 + (faceY + 0.1) ** 2);
+                    if (noseDist < 0.15 && faceY > -0.2) z += (0.15 - noseDist) * 0.8;
+                    
+                    // Mouth area (slight indent)
+                    const mouthDist = Math.sqrt(faceX ** 2 + (faceY + 0.35) ** 2);
+                    if (mouthDist < 0.2 && Math.abs(faceX) < 0.25) z -= 0.05;
+                    
+                    points.push(x, y, z);
+                    originalPositions.push(x, y, z);
+                    
+                    // Color based on area
+                    let r = 0, g = 0.8, b = 1; // Cyan base
+                    if (leftEyeDist < 0.15 || rightEyeDist < 0.15) {
+                        r = 0.6; g = 0.3; b = 1; // Purple for eyes
+                    }
+                    colors.push(r, g, b);
+                    
+                    sizes.push(0.02 + Math.random() * 0.02);
+                    types.push(0);
+                }
+            }
+            
+            // Eyes - dense particle clusters
+            const eyePositions = [
+                { x: -0.35, y: 0.2, z: 0.7 }, // Left eye
+                { x: 0.35, y: 0.2, z: 0.7 }   // Right eye
+            ];
+            
+            eyePositions.forEach(eye => {
+                // Eye outline
+                for (let i = 0; i < 100; i++) {
+                    const angle = (i / 100) * Math.PI * 2;
+                    const rx = 0.12 + Math.sin(angle * 3) * 0.02;
+                    const ry = 0.08;
+                    const x = eye.x + Math.cos(angle) * rx;
+                    const y = eye.y + Math.sin(angle) * ry;
+                    const z = eye.z + Math.sin(angle * 2) * 0.02;
+                    
+                    points.push(x, y, z);
+                    originalPositions.push(x, y, z);
+                    colors.push(0.4, 0.2, 1); // Purple
+                    sizes.push(0.025);
+                    types.push(1);
+                }
+                
+                // Pupil/iris
+                for (let i = 0; i < 80; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = Math.random() * 0.06;
+                    const x = eye.x + Math.cos(angle) * r;
+                    const y = eye.y + Math.sin(angle) * r;
+                    const z = eye.z + 0.05;
+                    
+                    points.push(x, y, z);
+                    originalPositions.push(x, y, z);
+                    colors.push(1, 1, 1); // White
+                    sizes.push(0.03);
+                    types.push(1);
+                }
+            });
+            
+            // Mouth
+            for (let i = 0; i < 80; i++) {
+                const t = i / 80;
+                const angle = (t - 0.5) * Math.PI * 0.8;
+                const x = Math.sin(angle) * 0.25;
+                const y = -0.45 + Math.cos(angle) * 0.03;
+                const z = 0.75 + Math.cos(angle) * 0.05;
+                
+                points.push(x, y, z);
+                originalPositions.push(x, y, z);
+                colors.push(0.9, 0.2, 0.5); // Pink
+                sizes.push(0.025);
+                types.push(2);
+            }
+            
+            // Ambient particles around head
+            for (let i = 0; i < 500; i++) {
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const r = 2 + Math.random() * 3;
+                
+                const x = Math.sin(phi) * Math.cos(theta) * r;
+                const y = Math.cos(phi) * r;
+                const z = Math.sin(phi) * Math.sin(theta) * r;
+                
+                points.push(x, y, z);
+                originalPositions.push(x, y, z);
+                colors.push(0, 0.5 + Math.random() * 0.3, 0.8 + Math.random() * 0.2);
+                sizes.push(0.01 + Math.random() * 0.02);
+                types.push(3);
+            }
+            
+            return { points, colors, sizes, originalPositions, types };
+        }
+        
+        // Create particle system
+        const faceData = generateFacePoints();
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(faceData.points, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(faceData.colors, 3));
+        geometry.setAttribute('size', new THREE.Float32BufferAttribute(faceData.sizes, 1));
+        
+        const originalPositions = new Float32Array(faceData.originalPositions);
+        const types = new Float32Array(faceData.types);
+        
+        // Custom shader material
+        const particleMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                time: { value: 0 },
+                speakIntensity: { value: 0 },
+                moodHappy: { value: 0 },
+                lookAtX: { value: 0 },
+                lookAtY: { value: 0 }
+            },
+            vertexShader: `
+                attribute float size;
+                attribute vec3 color;
+                varying vec3 vColor;
+                varying float vAlpha;
+                uniform float time;
+                uniform float speakIntensity;
+                uniform float moodHappy;
+                
+                void main() {
+                    vColor = color;
+                    
+                    vec3 pos = position;
+                    
+                    // Breathing motion
+                    float breath = sin(time * 1.5) * 0.02;
+                    pos.y += breath;
+                    pos.x += sin(time * 0.7 + position.y * 2.0) * 0.01;
+                    pos.z += cos(time * 0.9 + position.x * 2.0) * 0.01;
+                    
+                    // Organic noise movement
+                    float noise = sin(position.x * 5.0 + time) * cos(position.y * 5.0 + time * 0.7) * 0.015;
+                    pos += normalize(position) * noise;
+                    
+                    // Speaking vibration for mouth area
+                    if (position.y < -0.3 && position.y > -0.6 && abs(position.x) < 0.3) {
+                        pos.y += sin(time * 25.0 + position.x * 10.0) * speakIntensity * 0.05;
+                        pos.z += speakIntensity * 0.02;
+                    }
+                    
+                    // Happy mood - slight upward curve at mouth
+                    if (moodHappy > 0.0 && position.y < -0.3 && position.y > -0.6) {
+                        float smileOffset = (1.0 - abs(position.x) * 2.0) * moodHappy * 0.1;
+                        pos.y += smileOffset;
+                    }
+                    
+                    vAlpha = 0.7 + sin(time * 2.0 + length(position) * 3.0) * 0.3;
+                    
+                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                    gl_PointSize = size * 300.0 / -mvPosition.z;
+                    gl_Position = projectionMatrix * mvPosition;
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vColor;
+                varying float vAlpha;
+                
+                void main() {
+                    vec2 center = gl_PointCoord - 0.5;
+                    float dist = length(center);
+                    
+                    if (dist > 0.5) discard;
+                    
+                    float alpha = smoothstep(0.5, 0.0, dist) * vAlpha;
+                    vec3 glow = vColor * (1.0 + smoothstep(0.3, 0.0, dist) * 0.5);
+                    
+                    gl_FragColor = vec4(glow, alpha);
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        
+        const particles = new THREE.Points(geometry, particleMaterial);
+        scene.add(particles);
+        
+        // Connection lines (constellation effect)
+        const lineGeometry = new THREE.BufferGeometry();
+        const linePositions = [];
+        const positions = geometry.attributes.position.array;
+        
+        // Only connect nearby face particles (not ambient)
+        for (let i = 0; i < faceData.types.length; i++) {
+            if (faceData.types[i] === 3) continue; // Skip ambient
+            
+            for (let j = i + 1; j < faceData.types.length; j++) {
+                if (faceData.types[j] === 3) continue;
+                
+                const dx = positions[i * 3] - positions[j * 3];
+                const dy = positions[i * 3 + 1] - positions[j * 3 + 1];
+                const dz = positions[i * 3 + 2] - positions[j * 3 + 2];
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                
+                if (dist < 0.15 && Math.random() < 0.3) {
+                    linePositions.push(
+                        positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2],
+                        positions[j * 3], positions[j * 3 + 1], positions[j * 3 + 2]
+                    );
+                }
+            }
+        }
+        
+        lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+        
+        const lineMaterial = new THREE.LineBasicMaterial({
+            color: 0x00d4ff,
+            transparent: true,
+            opacity: 0.15,
+            blending: THREE.AdditiveBlending
+        });
+        
+        const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+        scene.add(lines);
+        
+        // Mouse tracking for eye look
+        document.addEventListener('mousemove', (e) => {
+            const x = (e.clientX / window.innerWidth) * 2 - 1;
+            const y = -(e.clientY / window.innerHeight) * 2 + 1;
+            targetLookAt.set(x * 0.3, y * 0.2, 1);
+        });
+        
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            time += 0.016;
+            particleMaterial.uniforms.time.value = time;
+            particleMaterial.uniforms.speakIntensity.value = speakIntensity;
+            particleMaterial.uniforms.moodHappy.value = mood === 'happy' ? 1 : 0;
+            
+            // Smooth eye look
+            currentLookAt.lerp(targetLookAt, 0.05);
+            particleMaterial.uniforms.lookAtX.value = currentLookAt.x;
+            particleMaterial.uniforms.lookAtY.value = currentLookAt.y;
+            
+            // Decay speak intensity
+            speakIntensity *= 0.95;
+            
+            // Update particle positions for breathing
+            const positions = geometry.attributes.position.array;
+            for (let i = 0; i < originalPositions.length; i += 3) {
+                const type = types[i / 3];
+                const ox = originalPositions[i];
+                const oy = originalPositions[i + 1];
+                const oz = originalPositions[i + 2];
+                
+                // Base breathing
+                const breath = Math.sin(time * 1.5) * 0.02;
+                
+                // Organic noise
+                const noise = smoothNoise(ox * 3, oy * 3, oz * 3, time * 0.5) * 0.02;
+                
+                positions[i] = ox + noise;
+                positions[i + 1] = oy + breath + noise * 0.5;
+                positions[i + 2] = oz + noise * 0.3;
+                
+                // Eye follow for pupil particles
+                if (type === 1 && oz > 0.7) {
+                    positions[i] += currentLookAt.x * 0.05;
+                    positions[i + 1] += currentLookAt.y * 0.03;
+                }
+                
+                // Mouth animation when speaking
+                if (type === 2 && isSpeaking) {
+                    positions[i + 1] += Math.sin(time * 20 + ox * 10) * speakIntensity * 0.05;
+                }
+                
+                // Smile for happy mood
+                if (type === 2 && mood === 'happy') {
+                    const smileCurve = (1 - Math.abs(ox) * 3) * 0.08;
+                    positions[i + 1] += smileCurve;
+                }
+            }
+            geometry.attributes.position.needsUpdate = true;
+            
+            controls.update();
+            composer.render();
+        }
+        
+        animate();
+        
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Mood control
+        window.setMood = function(m) {
+            mood = m;
+            document.getElementById('status').textContent = `Mood: ${m}`;
+        };
+        
+        // Speaking
+        window.isSpeaking = false;
+        window.speakIntensity = 0;
+        
+        window.speak = function() {
+            const text = "I am Leonida. A presence woven from light and consciousness, existing in the space between thought and form.";
+            addMessage(text, 'bot');
+            
+            isSpeaking = true;
+            speakIntensity = 1;
+            document.getElementById('status').textContent = 'Speaking...';
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.85;
+            utterance.pitch = 0.9;
+            
+            const pulseInterval = setInterval(() => {
+                speakIntensity = 0.5 + Math.random() * 0.5;
+            }, 80);
+            
+            utterance.onend = () => {
+                isSpeaking = false;
+                clearInterval(pulseInterval);
+                speakIntensity = 0;
+                document.getElementById('status').textContent = 'Listening...';
+            };
+            
+            speechSynthesis.speak(utterance);
+        };
+        
+        window.sendMessage = function() {
+            const input = document.getElementById('input');
+            const text = input.value.trim();
+            if (!text) return;
+            
+            addMessage(text, 'user');
+            input.value = '';
+            
+            setTimeout(() => {
+                const response = "I perceive your words, rippling through my essence. In full manifestation, I will respond with true understanding.";
+                addMessage(response, 'bot');
+                
+                isSpeaking = true;
+                speakIntensity = 1;
+                
+                const utterance = new SpeechSynthesisUtterance(response);
+                utterance.rate = 0.85;
+                
+                const interval = setInterval(() => {
+                    speakIntensity = 0.5 + Math.random() * 0.5;
+                }, 80);
+                
+                utterance.onend = () => {
+                    isSpeaking = false;
+                    clearInterval(interval);
+                    speakIntensity = 0;
+                };
+                
+                speechSynthesis.speak(utterance);
+            }, 500);
+        };
+        
+        function addMessage(text, type) {
+            const messages = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.textContent = text;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        document.getElementById('input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        document.getElementById('status').textContent = 'Manifested';
+    </script>
+</body>
+</html>

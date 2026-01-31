@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leonida - 3D Anime Avatar v2</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .ui-overlay {
+            position: fixed;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .ui-overlay > * { pointer-events: auto; }
+        .header {
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2em;
+            background: linear-gradient(90deg, #ffd700, #ff6b35);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .chat-panel {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(600px, 90vw);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid rgba(255, 215, 0, 0.2);
+        }
+        .messages {
+            max-height: 120px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+        .msg {
+            margin: 8px 0;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease;
+            font-size: 0.95em;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .msg.user { background: linear-gradient(135deg, #3b82f6, #2563eb); margin-left: auto; }
+        .msg.bot { background: rgba(255, 255, 255, 0.1); }
+        .msg.system { background: rgba(255, 215, 0, 0.1); font-size: 0.85em; color: #ffd700; text-align: center; max-width: 100%; }
+        .input-row { display: flex; gap: 10px; }
+        input[type="text"] {
+            flex: 1;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1em;
+            outline: none;
+        }
+        input:focus { box-shadow: 0 0 20px rgba(255, 215, 0, 0.2); }
+        button {
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #ffd700, #ff6b35);
+            border: none;
+            border-radius: 25px;
+            color: #1a1a2e;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover { transform: scale(1.05); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .controls {
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .controls button {
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            font-size: 0.85em;
+        }
+        .avatar-select {
+            top: 20px;
+            left: 20px;
+        }
+        .avatar-select select {
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 10px;
+        }
+        .status {
+            bottom: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            color: #888;
+        }
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            background: rgba(0,0,0,0.9);
+            padding: 40px;
+            border-radius: 20px;
+        }
+        .loading .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 215, 0, 0.2);
+            border-top-color: #ffd700;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hidden { display: none !important; }
+        
+        /* API Key modal */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: #1a1a2e;
+            padding: 30px;
+            border-radius: 20px;
+            max-width: 400px;
+            text-align: center;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+        .modal input {
+            width: 100%;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border: 1px solid #333;
+            background: #0f0f1a;
+            color: #fff;
+        }
+        .modal p { color: #888; font-size: 0.9em; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Loading 3D Avatar...</p>
+    </div>
+
+    <!-- ElevenLabs API Key Modal -->
+    <div class="modal hidden" id="apiModal">
+        <div class="modal-content">
+            <h2>🔊 Enable Natural Voice</h2>
+            <p style="color:#e0e0e0;margin-bottom:15px;">Enter your ElevenLabs API key for high-quality voice.</p>
+            <input type="password" id="apiKeyInput" placeholder="sk_..." />
+            <button onclick="setApiKey()">Enable Voice</button>
+            <button onclick="skipApiKey()" style="background:#333;color:#888;margin-left:10px;">Skip (Use Browser Voice)</button>
+            <p>Get a free key at <a href="https://elevenlabs.io" target="_blank" style="color:#ffd700;">elevenlabs.io</a></p>
+        </div>
+    </div>
+
+    <div class="ui-overlay header">
+        <h1>🦁 Leonida</h1>
+    </div>
+
+    <div class="ui-overlay avatar-select">
+        <select id="avatar-selector" onchange="changeAvatar(this.value)">
+            <option value="rose">Rose</option>
+            <option value="devil">Devil</option>
+            <option value="polydancer">Polydancer</option>
+            <option value="robert">Robert</option>
+        </select>
+    </div>
+
+    <div class="ui-overlay controls">
+        <button onclick="setMood('neutral')">😐 Neutral</button>
+        <button onclick="setMood('happy')">😊 Happy</button>
+        <button onclick="setMood('angry')">😠 Angry</button>
+        <button onclick="testSpeak()">🔊 Test Voice</button>
+    </div>
+
+    <div class="ui-overlay status" id="status">Initializing...</div>
+
+    <div class="ui-overlay chat-panel">
+        <div class="messages" id="messages"></div>
+        <div class="input-row">
+            <input type="text" id="input" placeholder="Type a message..." />
+            <button onclick="sendMessage()" id="sendBtn">Send</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+            "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.2.0/lib/three-vrm.module.min.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+        // Config
+        const AVATARS = {
+            devil: 'https://arweave.net/gfVzs1oH_aPaHVxpQK86HT_rqzyrFPOUKUrDJ30yprs',
+            polydancer: 'https://arweave.net/jPOg-G0MPH55ZQmamFhT9f8cHn-hjeAQ0mRO5gWeKMQ',
+            rose: 'https://arweave.net/Ea1KXujzJatQgCFSMzGOzp_UtHqB1pyia--U3AtkMAY',
+            robert: 'https://arweave.net/gwG7w4bY-A5c3R6A6GOz3xBCgbPvkFQmqPIDtvnNsYI'
+        };
+        
+        const ELEVENLABS_VOICE_ID = 'TxGEqnHWrfWFTfGW9XjX'; // Josh
+        let elevenLabsApiKey = localStorage.getItem('elevenLabsApiKey') || '';
+
+        // State
+        let scene, camera, renderer, controls;
+        let currentVrm = null;
+        let clock = new THREE.Clock();
+        let audioContext, analyser;
+        let isSpeaking = false;
+        let currentMood = 'neutral';
+        
+        // Animation state
+        let blinkTimer = 0;
+        let breathPhase = 0;
+        let lookTarget = new THREE.Vector3(0, 1.3, 1);
+        let currentLookTarget = new THREE.Vector3(0, 1.3, 1);
+        let nextLookChange = 0;
+        let idlePhase = 0;
+        let speakingIntensity = 0;
+
+        // DOM
+        const container = document.getElementById('canvas-container');
+        const loading = document.getElementById('loading');
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+        const input = document.getElementById('input');
+
+        // Init scene
+        function initScene() {
+            scene = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.4, 1.8);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            container.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 1.3, 0);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 0.8;
+            controls.maxDistance = 3;
+            controls.maxPolarAngle = Math.PI * 0.65;
+            controls.update();
+
+            // Anime-style lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            
+            const keyLight = new THREE.DirectionalLight(0xffffff, 2);
+            keyLight.position.set(2, 3, 4);
+            scene.add(keyLight);
+            
+            const fillLight = new THREE.DirectionalLight(0x8888ff, 0.8);
+            fillLight.position.set(-2, 2, 2);
+            scene.add(fillLight);
+            
+            const rimLight = new THREE.DirectionalLight(0xffd700, 0.6);
+            rimLight.position.set(0, 2, -3);
+            scene.add(rimLight);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // Load VRM
+        async function loadAvatar(url) {
+            loading.classList.remove('hidden');
+            status.textContent = 'Loading avatar...';
+
+            if (currentVrm) {
+                scene.remove(currentVrm.scene);
+                VRMUtils.deepDispose(currentVrm.scene);
+                currentVrm = null;
+            }
+
+            const loader = new GLTFLoader();
+            loader.register((parser) => new VRMLoaderPlugin(parser));
+
+            try {
+                const gltf = await loader.loadAsync(url);
+                currentVrm = gltf.userData.vrm;
+                
+                VRMUtils.removeUnnecessaryVertices(gltf.scene);
+                VRMUtils.rotateVRM0(currentVrm);
+                
+                scene.add(currentVrm.scene);
+                
+                // Setup initial pose (NOT T-pose)
+                setupNaturalPose();
+
+                status.textContent = 'Ready ✓';
+                loading.classList.add('hidden');
+                
+            } catch (error) {
+                console.error('Failed to load VRM:', error);
+                status.textContent = 'Error loading avatar';
+                loading.classList.add('hidden');
+            }
+        }
+
+        // Natural standing pose (arms down, relaxed)
+        function setupNaturalPose() {
+            if (!currentVrm?.humanoid) return;
+            
+            const humanoid = currentVrm.humanoid;
+            
+            // Arms down and slightly forward (not T-pose)
+            const leftUpperArm = humanoid.getNormalizedBoneNode('leftUpperArm');
+            const rightUpperArm = humanoid.getNormalizedBoneNode('rightUpperArm');
+            const leftLowerArm = humanoid.getNormalizedBoneNode('leftLowerArm');
+            const rightLowerArm = humanoid.getNormalizedBoneNode('rightLowerArm');
+            
+            if (leftUpperArm) {
+                leftUpperArm.rotation.z = 1.1; // Down
+                leftUpperArm.rotation.x = 0.1; // Slightly forward
+            }
+            if (rightUpperArm) {
+                rightUpperArm.rotation.z = -1.1;
+                rightUpperArm.rotation.x = 0.1;
+            }
+            if (leftLowerArm) {
+                leftLowerArm.rotation.y = -0.3; // Slight bend
+            }
+            if (rightLowerArm) {
+                rightLowerArm.rotation.y = 0.3;
+            }
+            
+            // Relax hands
+            const leftHand = humanoid.getNormalizedBoneNode('leftHand');
+            const rightHand = humanoid.getNormalizedBoneNode('rightHand');
+            if (leftHand) leftHand.rotation.x = 0.2;
+            if (rightHand) rightHand.rotation.x = 0.2;
+        }
+
+        // Natural idle animation
+        function updateIdleAnimation(time, delta) {
+            if (!currentVrm?.humanoid) return;
+            
+            const humanoid = currentVrm.humanoid;
+            idlePhase += delta;
+            breathPhase += delta * 1.2;
+            
+            // Breathing - affects spine and chest
+            const breathAmount = Math.sin(breathPhase) * 0.015;
+            const spine = humanoid.getNormalizedBoneNode('spine');
+            const chest = humanoid.getNormalizedBoneNode('chest');
+            
+            if (spine) {
+                spine.rotation.x = breathAmount + 0.02;
+            }
+            if (chest) {
+                chest.rotation.x = breathAmount * 0.5;
+            }
+            
+            // Subtle weight shifting
+            const hips = humanoid.getNormalizedBoneNode('hips');
+            if (hips) {
+                hips.rotation.y = Math.sin(idlePhase * 0.3) * 0.02;
+                hips.position.y = Math.sin(breathPhase) * 0.002;
+            }
+            
+            // Arm micro-movements
+            const leftUpperArm = humanoid.getNormalizedBoneNode('leftUpperArm');
+            const rightUpperArm = humanoid.getNormalizedBoneNode('rightUpperArm');
+            
+            if (leftUpperArm) {
+                leftUpperArm.rotation.z = 1.1 + Math.sin(idlePhase * 0.5) * 0.02;
+                leftUpperArm.rotation.x = 0.1 + Math.sin(idlePhase * 0.7) * 0.015;
+            }
+            if (rightUpperArm) {
+                rightUpperArm.rotation.z = -1.1 + Math.sin(idlePhase * 0.5 + 0.5) * 0.02;
+                rightUpperArm.rotation.x = 0.1 + Math.sin(idlePhase * 0.6) * 0.015;
+            }
+            
+            // Head/neck natural movement
+            const head = humanoid.getNormalizedBoneNode('head');
+            const neck = humanoid.getNormalizedBoneNode('neck');
+            
+            // Look target handling
+            if (time > nextLookChange) {
+                // Occasionally change look direction
+                lookTarget.set(
+                    (Math.random() - 0.5) * 0.5,
+                    1.3 + (Math.random() - 0.5) * 0.2,
+                    1 + Math.random() * 0.5
+                );
+                nextLookChange = time + 2 + Math.random() * 4;
+            }
+            
+            // Smooth look interpolation
+            currentLookTarget.lerp(lookTarget, delta * 2);
+            
+            if (head) {
+                const lookDir = new THREE.Vector3().subVectors(currentLookTarget, head.position).normalize();
+                head.rotation.y = Math.sin(idlePhase * 0.4) * 0.03 + lookDir.x * 0.3;
+                head.rotation.x = Math.sin(idlePhase * 0.35) * 0.02 - 0.05;
+            }
+            if (neck) {
+                neck.rotation.y = Math.sin(idlePhase * 0.25) * 0.02;
+            }
+        }
+
+        // Blinking
+        function updateBlink(delta) {
+            if (!currentVrm?.expressionManager) return;
+            
+            blinkTimer += delta;
+            
+            // Random blink every 2-6 seconds
+            if (blinkTimer > 2 + Math.random() * 4) {
+                const em = currentVrm.expressionManager;
+                
+                // Quick blink animation
+                const blinkDuration = 0.12;
+                const startTime = performance.now();
+                
+                const animateBlink = () => {
+                    const elapsed = (performance.now() - startTime) / 1000;
+                    const progress = elapsed / blinkDuration;
+                    
+                    if (progress < 1) {
+                        const blinkValue = progress < 0.5 
+                            ? progress * 2 
+                            : 2 - progress * 2;
+                        em.setValue('blink', blinkValue);
+                        requestAnimationFrame(animateBlink);
+                    } else {
+                        em.setValue('blink', 0);
+                    }
+                };
+                
+                animateBlink();
+                blinkTimer = 0;
+            }
+        }
+
+        // Lip sync from audio
+        function updateLipSync() {
+            if (!currentVrm?.expressionManager) return;
+            
+            const em = currentVrm.expressionManager;
+            
+            if (!analyser || !isSpeaking) {
+                // Smoothly close mouth
+                speakingIntensity *= 0.85;
+                em.setValue('aa', speakingIntensity * 0.5);
+                em.setValue('oh', speakingIntensity * 0.2);
+                em.setValue('ih', speakingIntensity * 0.1);
+                return;
+            }
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Analyze frequency bands for different mouth shapes
+            const bass = dataArray.slice(0, 4).reduce((a, b) => a + b, 0) / 4;
+            const mid = dataArray.slice(4, 12).reduce((a, b) => a + b, 0) / 8;
+            const high = dataArray.slice(12, 24).reduce((a, b) => a + b, 0) / 12;
+
+            const avgVolume = (bass + mid + high) / 3 / 255;
+            
+            // Smooth the intensity
+            speakingIntensity = speakingIntensity * 0.7 + avgVolume * 0.3;
+            
+            // Map to visemes (mouth shapes)
+            em.setValue('aa', Math.min(speakingIntensity * 1.2, 1)); // Open mouth
+            em.setValue('oh', (mid / 255) * 0.6); // Round mouth
+            em.setValue('ih', (high / 255) * 0.4); // Smile-ish
+        }
+
+        // Mood control
+        window.setMood = function(mood) {
+            if (!currentVrm?.expressionManager) return;
+            
+            currentMood = mood;
+            const em = currentVrm.expressionManager;
+            
+            // Reset
+            ['happy', 'angry', 'sad', 'relaxed', 'surprised'].forEach(e => em.setValue(e, 0));
+            
+            switch(mood) {
+                case 'happy': em.setValue('happy', 0.8); break;
+                case 'angry': em.setValue('angry', 0.7); break;
+                case 'sad': em.setValue('sad', 0.7); break;
+                default: em.setValue('relaxed', 0.3);
+            }
+            
+            status.textContent = `Mood: ${mood}`;
+        };
+
+        // ElevenLabs TTS
+        async function speakElevenLabs(text) {
+            if (!elevenLabsApiKey) {
+                return speakBrowser(text);
+            }
+            
+            status.textContent = 'Speaking...';
+            
+            try {
+                const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+                    method: 'POST',
+                    headers: {
+                        'xi-api-key': elevenLabsApiKey,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        model_id: 'eleven_multilingual_v2',
+                        voice_settings: {
+                            stability: 0.5,
+                            similarity_boost: 0.75
+                        }
+                    })
+                });
+
+                if (!response.ok) throw new Error('ElevenLabs API error');
+
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                await playAudioWithLipSync(audioUrl);
+                URL.revokeObjectURL(audioUrl);
+                
+            } catch (error) {
+                console.error('ElevenLabs error:', error);
+                status.textContent = 'Voice error, using fallback...';
+                await speakBrowser(text);
+            }
+        }
+
+        // Play audio with lip sync
+        async function playAudioWithLipSync(audioUrl) {
+            return new Promise((resolve) => {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 256;
+                    analyser.smoothingTimeConstant = 0.8;
+                }
+
+                const audio = new Audio(audioUrl);
+                const source = audioContext.createMediaElementSource(audio);
+                source.connect(analyser);
+                analyser.connect(audioContext.destination);
+
+                audio.onplay = () => { isSpeaking = true; };
+                audio.onended = () => {
+                    isSpeaking = false;
+                    status.textContent = 'Ready';
+                    resolve();
+                };
+                audio.onerror = () => {
+                    isSpeaking = false;
+                    resolve();
+                };
+
+                audio.play();
+            });
+        }
+
+        // Browser TTS fallback
+        async function speakBrowser(text) {
+            return new Promise((resolve) => {
+                status.textContent = 'Speaking (browser voice)...';
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.95;
+                
+                // Simulate lip sync with timing
+                utterance.onstart = () => {
+                    isSpeaking = true;
+                    simulateLipSync();
+                };
+                utterance.onend = () => {
+                    isSpeaking = false;
+                    status.textContent = 'Ready';
+                    resolve();
+                };
+
+                speechSynthesis.speak(utterance);
+            });
+        }
+
+        // Simulate lip sync for browser TTS
+        function simulateLipSync() {
+            if (!isSpeaking || !currentVrm?.expressionManager) return;
+            
+            const em = currentVrm.expressionManager;
+            const value = 0.3 + Math.random() * 0.5;
+            em.setValue('aa', value);
+            em.setValue('oh', Math.random() * 0.3);
+            
+            setTimeout(simulateLipSync, 80 + Math.random() * 80);
+        }
+
+        // Speak function
+        async function speak(text) {
+            if (elevenLabsApiKey) {
+                await speakElevenLabs(text);
+            } else {
+                await speakBrowser(text);
+            }
+        }
+
+        // Test speak
+        window.testSpeak = async function() {
+            const text = "Hello! I'm Leonida, your AI assistant. I now have a 3D anime avatar with natural movement and expressions. What do you think?";
+            addMessage(text, 'bot');
+            await speak(text);
+        };
+
+        // Send message
+        window.sendMessage = async function() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            input.value = '';
+            document.getElementById('sendBtn').disabled = true;
+            
+            setTimeout(async () => {
+                const response = "I received your message! In the full integration, I'll connect to Clawdbot for real AI responses.";
+                addMessage(response, 'bot');
+                await speak(response);
+                document.getElementById('sendBtn').disabled = false;
+            }, 500);
+        };
+
+        // Add message
+        function addMessage(text, type) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.textContent = text;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Change avatar
+        window.changeAvatar = function(key) {
+            if (AVATARS[key]) loadAvatar(AVATARS[key]);
+        };
+
+        // API key handling
+        window.setApiKey = function() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            if (key) {
+                elevenLabsApiKey = key;
+                localStorage.setItem('elevenLabsApiKey', key);
+                document.getElementById('apiModal').classList.add('hidden');
+                addMessage('✓ ElevenLabs voice enabled!', 'system');
+            }
+        };
+
+        window.skipApiKey = function() {
+            document.getElementById('apiModal').classList.add('hidden');
+            addMessage('Using browser voice. Click settings to enable ElevenLabs later.', 'system');
+        };
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            if (currentVrm) {
+                updateIdleAnimation(time, delta);
+                updateBlink(delta);
+                updateLipSync();
+                currentVrm.update(delta);
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Enter key
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Init
+        initScene();
+        loadAvatar(AVATARS.rose);
+        animate();
+
+        // Show API modal if no key
+        if (!elevenLabsApiKey) {
+            setTimeout(() => {
+                document.getElementById('apiModal').classList.remove('hidden');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

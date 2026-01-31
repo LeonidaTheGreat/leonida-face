@@ -448,13 +448,12 @@
                     // For partial passes, randomly include
                     if (isLastPass && Math.random() > lastPassChance) continue;
                     
-                    // Add jitter - more for oversampled passes to spread them out
-                    const jitter = 0.015 + (pass * 0.025); // Base jitter + more per pass
-                    
+                    // No position jitter - particles stay on surface
+                    // Variation comes from different drift seeds (float-away animation)
                     particleBaseData.push({
-                        x: v.x + (Math.random() - 0.5) * jitter,
-                        y: v.y + (Math.random() - 0.5) * jitter,
-                        z: v.z + (Math.random() - 0.5) * jitter,
+                        x: v.x,
+                        y: v.y,
+                        z: v.z,
                         seed1: Math.random() * Math.PI * 2,
                         seed2: Math.random() * Math.PI * 2,
                         driftX: (Math.random() - 0.5) * 2,

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leonida - 3D Anime Avatar</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #0f0f1a 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        .ui-overlay {
+            position: fixed;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .ui-overlay > * {
+            pointer-events: auto;
+        }
+        .header {
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2em;
+            background: linear-gradient(90deg, #ffd700, #ff6b35);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+        }
+        .header p {
+            color: #888;
+            font-size: 0.9em;
+        }
+        .chat-panel {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(600px, 90vw);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid rgba(255, 215, 0, 0.2);
+        }
+        .messages {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+        .msg {
+            margin: 8px 0;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .msg.user {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+        .msg.bot {
+            background: rgba(255, 255, 255, 0.1);
+            border-bottom-left-radius: 5px;
+        }
+        .msg.system {
+            background: rgba(255, 215, 0, 0.1);
+            font-size: 0.85em;
+            color: #ffd700;
+            text-align: center;
+            max-width: 100%;
+        }
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1em;
+            outline: none;
+            transition: all 0.3s;
+        }
+        input[type="text"]:focus {
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+        }
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #ffd700, #ff6b35);
+            border: none;
+            border-radius: 25px;
+            color: #1a1a2e;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .controls {
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .controls button {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            font-size: 0.9em;
+        }
+        .controls button:hover {
+            background: rgba(255, 215, 0, 0.2);
+        }
+        .controls button.active {
+            background: rgba(255, 215, 0, 0.3);
+            color: #ffd700;
+        }
+        .status {
+            bottom: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            color: #888;
+        }
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+        }
+        .loading .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 215, 0, 0.2);
+            border-top-color: #ffd700;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .hidden { display: none !important; }
+        
+        /* Avatar selection */
+        .avatar-select {
+            top: 20px;
+            left: 20px;
+        }
+        .avatar-select select {
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 10px;
+            font-size: 0.9em;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Loading 3D Avatar...</p>
+    </div>
+
+    <div class="ui-overlay header">
+        <h1>🦁 Leonida</h1>
+        <p>AI Assistant with 3D Anime Avatar</p>
+    </div>
+
+    <div class="ui-overlay avatar-select">
+        <select id="avatar-selector" onchange="changeAvatar(this.value)">
+            <option value="devil">Devil (Default)</option>
+            <option value="polydancer">Polydancer</option>
+            <option value="rose">Rose</option>
+            <option value="robert">Robert</option>
+            <option value="custom">Custom URL...</option>
+        </select>
+    </div>
+
+    <div class="ui-overlay controls">
+        <button onclick="setMood('neutral')">😐 Neutral</button>
+        <button onclick="setMood('happy')">😊 Happy</button>
+        <button onclick="setMood('angry')">😠 Angry</button>
+        <button onclick="setMood('sad')">😢 Sad</button>
+        <button onclick="testSpeak()">🔊 Test Voice</button>
+    </div>
+
+    <div class="ui-overlay status" id="status">Initializing...</div>
+
+    <div class="ui-overlay chat-panel">
+        <div class="messages" id="messages">
+            <div class="msg system">3D VRM Avatar with lip-sync. Type a message or click Test Voice!</div>
+        </div>
+        <div class="input-row">
+            <input type="text" id="input" placeholder="Type a message..." />
+            <button onclick="sendMessage()" id="sendBtn">Send</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+            "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.2.0/lib/three-vrm.module.min.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+        // Avatar URLs (CC0 licensed from opensourceavatars.com)
+        const AVATARS = {
+            devil: 'https://arweave.net/gfVzs1oH_aPaHVxpQK86HT_rqzyrFPOUKUrDJ30yprs',
+            polydancer: 'https://arweave.net/jPOg-G0MPH55ZQmamFhT9f8cHn-hjeAQ0mRO5gWeKMQ',
+            rose: 'https://arweave.net/Ea1KXujzJatQgCFSMzGOzp_UtHqB1pyia--U3AtkMAY',
+            robert: 'https://arweave.net/gwG7w4bY-A5c3R6A6GOz3xBCgbPvkFQmqPIDtvnNsYI'
+        };
+
+        // Global state
+        let scene, camera, renderer, controls;
+        let currentVrm = null;
+        let clock = new THREE.Clock();
+        let audioContext, analyser, audioSource;
+        let isSpeaking = false;
+        let currentMood = 'neutral';
+        let blinkTimer = 0;
+        let isBlinking = false;
+
+        // DOM elements
+        const container = document.getElementById('canvas-container');
+        const loading = document.getElementById('loading');
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+        const input = document.getElementById('input');
+
+        // Initialize Three.js scene
+        function initScene() {
+            scene = new THREE.Scene();
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.3, 2);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1;
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 1.2, 0);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 1;
+            controls.maxDistance = 5;
+            controls.update();
+
+            // Lighting - anime style
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            mainLight.position.set(1, 2, 3);
+            scene.add(mainLight);
+
+            const fillLight = new THREE.DirectionalLight(0x8888ff, 0.5);
+            fillLight.position.set(-1, 1, -1);
+            scene.add(fillLight);
+
+            const rimLight = new THREE.DirectionalLight(0xffd700, 0.3);
+            rimLight.position.set(0, 2, -2);
+            scene.add(rimLight);
+
+            // Handle resize
+            window.addEventListener('resize', onResize);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Load VRM avatar
+        async function loadAvatar(url) {
+            loading.classList.remove('hidden');
+            status.textContent = 'Loading avatar...';
+
+            // Remove existing avatar
+            if (currentVrm) {
+                scene.remove(currentVrm.scene);
+                VRMUtils.deepDispose(currentVrm.scene);
+                currentVrm = null;
+            }
+
+            const loader = new GLTFLoader();
+            loader.register((parser) => new VRMLoaderPlugin(parser));
+
+            try {
+                const gltf = await loader.loadAsync(url);
+                currentVrm = gltf.userData.vrm;
+
+                // Rotate to face camera
+                VRMUtils.rotateVRM0(currentVrm);
+                
+                scene.add(currentVrm.scene);
+
+                // Center camera on head
+                const head = currentVrm.humanoid?.getNormalizedBoneNode('head');
+                if (head) {
+                    const headPos = new THREE.Vector3();
+                    head.getWorldPosition(headPos);
+                    controls.target.copy(headPos);
+                    camera.position.set(headPos.x, headPos.y, headPos.z + 1.5);
+                }
+
+                status.textContent = 'Avatar ready ✓';
+                loading.classList.add('hidden');
+                
+                console.log('VRM loaded:', currentVrm);
+                console.log('Expressions:', currentVrm.expressionManager?.expressionMap);
+                
+            } catch (error) {
+                console.error('Failed to load VRM:', error);
+                status.textContent = 'Error: ' + error.message;
+                loading.classList.add('hidden');
+            }
+        }
+
+        // Expression/mood control
+        window.setMood = function(mood) {
+            if (!currentVrm?.expressionManager) return;
+            
+            currentMood = mood;
+            const em = currentVrm.expressionManager;
+            
+            // Reset all expressions
+            em.setValue('happy', 0);
+            em.setValue('angry', 0);
+            em.setValue('sad', 0);
+            em.setValue('relaxed', 0);
+            em.setValue('surprised', 0);
+            
+            // Set new mood
+            switch(mood) {
+                case 'happy':
+                    em.setValue('happy', 1);
+                    break;
+                case 'angry':
+                    em.setValue('angry', 1);
+                    break;
+                case 'sad':
+                    em.setValue('sad', 1);
+                    break;
+                case 'neutral':
+                default:
+                    em.setValue('relaxed', 0.3);
+            }
+            
+            status.textContent = `Mood: ${mood}`;
+        };
+
+        // Lip sync from audio
+        function updateLipSync() {
+            if (!currentVrm?.expressionManager || !analyser || !isSpeaking) {
+                if (currentVrm?.expressionManager) {
+                    currentVrm.expressionManager.setValue('aa', 0);
+                    currentVrm.expressionManager.setValue('oh', 0);
+                }
+                return;
+            }
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Get average volume
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            const volume = Math.min(average / 128, 1);
+
+            // Map volume to mouth shapes
+            const em = currentVrm.expressionManager;
+            em.setValue('aa', volume * 0.8);
+            em.setValue('oh', volume * 0.3);
+        }
+
+        // Automatic blinking
+        function updateBlink(delta) {
+            if (!currentVrm?.expressionManager) return;
+
+            blinkTimer += delta;
+            
+            if (!isBlinking && blinkTimer > 3 + Math.random() * 4) {
+                isBlinking = true;
+                blinkTimer = 0;
+            }
+            
+            if (isBlinking) {
+                const blinkProgress = blinkTimer / 0.15;
+                const blinkValue = blinkProgress < 0.5 
+                    ? blinkProgress * 2 
+                    : 2 - blinkProgress * 2;
+                
+                currentVrm.expressionManager.setValue('blink', Math.max(0, blinkValue));
+                
+                if (blinkProgress >= 1) {
+                    isBlinking = false;
+                    blinkTimer = 0;
+                    currentVrm.expressionManager.setValue('blink', 0);
+                }
+            }
+        }
+
+        // Subtle idle animation
+        function updateIdle(time) {
+            if (!currentVrm?.humanoid) return;
+
+            // Subtle breathing motion
+            const spine = currentVrm.humanoid.getNormalizedBoneNode('spine');
+            if (spine) {
+                spine.rotation.x = Math.sin(time * 1.5) * 0.02;
+            }
+
+            // Subtle head movement
+            const head = currentVrm.humanoid.getNormalizedBoneNode('head');
+            if (head) {
+                head.rotation.y = Math.sin(time * 0.5) * 0.03;
+                head.rotation.x = Math.sin(time * 0.7) * 0.02;
+            }
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            if (currentVrm) {
+                updateLipSync();
+                updateBlink(delta);
+                updateIdle(time);
+                currentVrm.update(delta);
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Text-to-speech with lip sync
+        async function speak(text) {
+            status.textContent = 'Speaking...';
+            isSpeaking = true;
+
+            // Initialize audio context on first use
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+            }
+
+            // Use Web Speech API for now (can swap to ElevenLabs)
+            return new Promise((resolve) => {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.9;
+                utterance.pitch = 1.0;
+                
+                // Create oscillator for lip sync (Web Speech doesn't give audio data)
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(analyser);
+                gainNode.gain.value = 0.5;
+                oscillator.start();
+
+                utterance.onstart = () => {
+                    isSpeaking = true;
+                };
+
+                utterance.onend = () => {
+                    isSpeaking = false;
+                    oscillator.stop();
+                    status.textContent = 'Ready';
+                    resolve();
+                };
+
+                utterance.onerror = () => {
+                    isSpeaking = false;
+                    oscillator.stop();
+                    status.textContent = 'Speech error';
+                    resolve();
+                };
+
+                speechSynthesis.speak(utterance);
+            });
+        }
+
+        // Test speak function
+        window.testSpeak = async function() {
+            const text = "Hello! I'm Leonida, your AI assistant. I now have a 3D anime avatar with lip-sync and expressions. Pretty cool, right?";
+            addMessage(text, 'bot');
+            await speak(text);
+        };
+
+        // Send message
+        window.sendMessage = async function() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            input.value = '';
+
+            // Simulate response (in production, call Clawdbot API)
+            document.getElementById('sendBtn').disabled = true;
+            
+            setTimeout(async () => {
+                const response = "I received your message! In the full integration, I'll connect to Clawdbot to generate real AI responses with my voice.";
+                addMessage(response, 'bot');
+                await speak(response);
+                document.getElementById('sendBtn').disabled = false;
+            }, 500);
+        };
+
+        // Add message to chat
+        function addMessage(text, type) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.textContent = text;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        // Change avatar
+        window.changeAvatar = function(key) {
+            if (key === 'custom') {
+                const url = prompt('Enter VRM file URL:');
+                if (url) loadAvatar(url);
+            } else if (AVATARS[key]) {
+                loadAvatar(AVATARS[key]);
+            }
+        };
+
+        // Enter key to send
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Initialize
+        initScene();
+        loadAvatar(AVATARS.devil);
+        animate();
+    </script>
+</body>
+</html>

@@ -28,52 +28,74 @@
         
         .controls {
             position: fixed;
-            top: 20px;
-            right: 20px;
+            top: 10px;
+            right: 10px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
             z-index: 10;
-            background: rgba(0,0,0,0.7);
-            padding: 15px;
-            border-radius: 10px;
-            max-height: calc(100vh - 40px);
+            background: rgba(0,0,0,0.85);
+            padding: 12px;
+            border-radius: 8px;
+            max-height: calc(100vh - 20px);
             overflow-y: auto;
-            width: 200px;
+            width: 240px;
+            font-size: 0.7em;
         }
         .controls h3 {
-            font-size: 0.7em;
+            font-size: 0.85em;
             text-transform: uppercase;
             color: rgba(255,255,255,0.4);
             margin-top: 8px;
             border-top: 1px solid rgba(255,255,255,0.1);
-            padding-top: 10px;
+            padding-top: 8px;
         }
         .controls h3:first-child {
             margin-top: 0;
             border-top: none;
             padding-top: 0;
         }
-        .controls input[type="range"] {
-            width: 100%;
-        }
-        .controls label {
-            font-size: 0.75em;
-            color: rgba(255,255,255,0.7);
+        .slider-row {
             display: flex;
             flex-direction: column;
+            gap: 3px;
+            margin-bottom: 6px;
+        }
+        .slider-row label {
+            color: rgba(255,255,255,0.7);
+        }
+        .slider-row input[type="range"] {
+            width: 100%;
+        }
+        .range-inputs {
+            display: flex;
             gap: 4px;
+            align-items: center;
+        }
+        .range-inputs input[type="number"] {
+            width: 50px;
+            padding: 2px 4px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 3px;
+            color: #fff;
+            font-size: 0.9em;
+        }
+        .range-inputs span {
+            color: rgba(255,255,255,0.4);
+            font-size: 0.9em;
         }
         .controls select {
-            padding: 5px;
+            padding: 4px;
             border-radius: 4px;
             border: 1px solid rgba(255,255,255,0.2);
             background: rgba(0,0,0,0.5);
             color: #fff;
+            width: 100%;
         }
         .controls input[type="color"] {
             width: 100%;
-            height: 30px;
+            height: 25px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
@@ -86,47 +108,100 @@
     
     <div class="controls">
         <h3>Particles</h3>
-        <label>Size
-            <input type="range" id="size" min="0.1" max="2" value="0.5" step="0.05">
-        </label>
-        <label>Density
-            <input type="range" id="density" min="5" max="100" value="40">
-        </label>
-        <label>Shape
+        
+        <div class="slider-row">
+            <label>Size</label>
+            <input type="range" id="size" min="0.05" max="3" value="0.4" step="0.01">
+            <div class="range-inputs">
+                <input type="number" id="sizeMin" value="0.05" step="0.01"> 
+                <span>-</span>
+                <input type="number" id="sizeMax" value="3" step="0.1">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Density</label>
+            <input type="range" id="density" min="1" max="100" value="35">
+            <div class="range-inputs">
+                <input type="number" id="densityMin" value="1"> 
+                <span>-</span>
+                <input type="number" id="densityMax" value="100">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Shape</label>
             <select id="shape">
                 <option value="circle">Circle</option>
                 <option value="square">Square</option>
-                <option value="soft">Soft Circle</option>
+                <option value="soft" selected>Soft Circle</option>
             </select>
-        </label>
+        </div>
         
         <h3>Dissipation</h3>
-        <label>Reference Point
+        
+        <div class="slider-row">
+            <label>Reference Point</label>
             <select id="reference">
                 <option value="model">Model (face = front)</option>
                 <option value="camera">Camera (facing = front)</option>
             </select>
-        </label>
-        <label>Density Falloff
-            <input type="range" id="dissipation" min="0" max="100" value="60">
-        </label>
-        <label>Float Away
-            <input type="range" id="floatAway" min="0" max="100" value="50">
-        </label>
+        </div>
+        
+        <div class="slider-row">
+            <label>Effect Start (% from front unaffected)</label>
+            <input type="range" id="effectStart" min="0" max="90" value="30">
+            <div class="range-inputs">
+                <input type="number" id="effectStartMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="effectStartMax" value="90">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Density Falloff</label>
+            <input type="range" id="dissipation" min="0" max="100" value="50">
+            <div class="range-inputs">
+                <input type="number" id="dissipationMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="dissipationMax" value="100">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Float Away Distance</label>
+            <input type="range" id="floatAway" min="0" max="200" value="60">
+            <div class="range-inputs">
+                <input type="number" id="floatAwayMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="floatAwayMax" value="200">
+            </div>
+        </div>
         
         <h3>Appearance</h3>
-        <label>Color
+        
+        <div class="slider-row">
+            <label>Color</label>
             <input type="color" id="color" value="#4488ff">
-        </label>
-        <label>Glow
-            <input type="range" id="glow" min="0" max="100" value="30">
-        </label>
-        <label>Background
+        </div>
+        
+        <div class="slider-row">
+            <label>Glow</label>
+            <input type="range" id="glow" min="0" max="200" value="30">
+            <div class="range-inputs">
+                <input type="number" id="glowMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="glowMax" value="200">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Background</label>
             <select id="background">
                 <option value="dark">Dark</option>
                 <option value="light">Light</option>
             </select>
-        </label>
+        </div>
     </div>
 
     <script type="importmap">
@@ -146,7 +221,7 @@
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         
-        // Scene setup
+        // Scene
         const container = document.getElementById('container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a2e);
@@ -162,10 +237,9 @@
         // Post-processing
         const composer = new EffectComposer(renderer);
         composer.addPass(new RenderPass(scene, camera));
-        
         const bloomPass = new UnrealBloomPass(
             new THREE.Vector2(window.innerWidth, window.innerHeight),
-            0.5, 0.4, 0.85
+            0.3, 0.4, 0.85
         );
         composer.addPass(bloomPass);
         
@@ -173,33 +247,30 @@
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        controls.minDistance = 1;
-        controls.maxDistance = 10;
         
         // State
         let time = 0;
         let pointsMesh = null;
         let allVertices = [];
-        let particleData = []; // Store particle positions and offsets
+        let particleBaseData = []; // Original positions + random seeds
         
         // Settings
         let settings = {
-            size: 0.5,
-            density: 0.4,
-            shape: 'circle',
+            size: 0.4,
+            density: 0.35,
+            shape: 'soft',
             reference: 'model',
-            dissipation: 0.6,
-            floatAway: 0.5,
+            effectStart: 0.3,  // 30% from front unaffected
+            dissipation: 0.5,
+            floatAway: 0.6,
             color: new THREE.Color(0x4488ff),
             glow: 0.3,
             isDark: true
         };
         
-        // Load head model
+        // Load model
         const loader = new OBJLoader();
-        const modelUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/walt/WaltHead.obj';
-        
-        loader.load(modelUrl, (obj) => {
+        loader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/walt/WaltHead.obj', (obj) => {
             document.getElementById('status').textContent = 'Processing...';
             
             let vertices = [];
@@ -216,7 +287,7 @@
                 }
             });
             
-            // Normalize and center
+            // Normalize
             const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
             vertices.forEach(v => {
                 bounds.minX = Math.min(bounds.minX, v.x); bounds.maxX = Math.max(bounds.maxX, v.x);
@@ -224,105 +295,143 @@
                 bounds.minZ = Math.min(bounds.minZ, v.z); bounds.maxZ = Math.max(bounds.maxZ, v.z);
             });
             
-            const centerX = (bounds.minX + bounds.maxX) / 2;
-            const centerY = (bounds.minY + bounds.maxY) / 2;
-            const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+            const cx = (bounds.minX + bounds.maxX) / 2;
+            const cy = (bounds.minY + bounds.maxY) / 2;
+            const cz = (bounds.minZ + bounds.maxZ) / 2;
             const scale = 2 / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, bounds.maxZ - bounds.minZ);
             
             allVertices = vertices.map(v => ({
-                x: (v.x - centerX) * scale,
-                y: (v.y - centerY) * scale,
-                z: (v.z - centerZ) * scale
+                x: (v.x - cx) * scale,
+                y: (v.y - cy) * scale,
+                z: (v.z - cz) * scale
             }));
             
-            createParticles();
-        }, null, (error) => {
-            document.getElementById('status').textContent = 'Error loading model';
+            initParticles();
         });
         
-        function createParticles() {
+        function initParticles() {
+            // Sample all vertices once, store with random seeds
+            particleBaseData = allVertices
+                .filter(() => Math.random() < settings.density)
+                .map(v => ({
+                    x: v.x, y: v.y, z: v.z,
+                    // Random seeds for consistent animation
+                    seed1: Math.random() * Math.PI * 2,
+                    seed2: Math.random() * Math.PI * 2,
+                    driftX: (Math.random() - 0.5) * 2,
+                    driftY: (Math.random() - 0.3),
+                    driftZ: -Math.random(),  // Drift backward
+                    speed: 0.3 + Math.random() * 0.4,
+                    sizeVar: 0.7 + Math.random() * 0.6
+                }));
+            
+            createMesh();
+        }
+        
+        function createMesh() {
             if (pointsMesh) scene.remove(pointsMesh);
             
-            // Sample vertices
-            let sampled = allVertices.filter(() => Math.random() < settings.density);
-            
-            // For model reference, filter by z (model's front/back)
-            if (settings.reference === 'model') {
-                sampled = sampled.filter(v => {
-                    const normalizedZ = (v.z + 1) / 2; // 0 = back, 1 = front
-                    const keepChance = Math.pow(normalizedZ, settings.dissipation * 4);
-                    return Math.random() < keepChance;
-                });
-            }
-            
-            // Store particle data with float-away offsets
-            particleData = sampled.map(v => {
-                const normalizedZ = (v.z + 1) / 2;
-                const backness = 1 - normalizedZ; // 0 = front, 1 = back
-                
-                // Float away amount based on how "back" the particle is
-                const floatAmount = backness * backness * settings.floatAway * 2;
-                
-                // Random drift direction, biased away from center
-                const driftAngle = Math.random() * Math.PI * 2;
-                const driftUp = (Math.random() - 0.3);
-                
-                return {
-                    baseX: v.x,
-                    baseY: v.y,
-                    baseZ: v.z,
-                    normalizedZ: normalizedZ,
-                    // Offset for floating
-                    offsetX: Math.cos(driftAngle) * floatAmount * 0.5,
-                    offsetY: driftUp * floatAmount * 0.3,
-                    offsetZ: -floatAmount * 0.8, // Drift backward
-                    // Animation phase
-                    phase: Math.random() * Math.PI * 2,
-                    speed: 0.5 + Math.random() * 0.5
-                };
-            });
-            
-            const count = particleData.length;
+            const count = particleBaseData.length;
             const positions = new Float32Array(count * 3);
+            const basePositions = new Float32Array(count * 3);
             const sizes = new Float32Array(count);
-            const alphas = new Float32Array(count);
+            const seeds = new Float32Array(count * 4); // seed1, seed2, speed, sizeVar
+            const drifts = new Float32Array(count * 3);
             
             for (let i = 0; i < count; i++) {
-                const p = particleData[i];
-                positions[i * 3] = p.baseX;
-                positions[i * 3 + 1] = p.baseY;
-                positions[i * 3 + 2] = p.baseZ;
-                
-                // Size varies by depth
-                const depthScale = 0.5 + p.normalizedZ * 0.5;
-                sizes[i] = settings.size * depthScale * (0.7 + Math.random() * 0.6);
-                
-                // Alpha also varies
-                alphas[i] = 0.3 + p.normalizedZ * 0.7;
+                const p = particleBaseData[i];
+                basePositions[i * 3] = p.x;
+                basePositions[i * 3 + 1] = p.y;
+                basePositions[i * 3 + 2] = p.z;
+                positions[i * 3] = p.x;
+                positions[i * 3 + 1] = p.y;
+                positions[i * 3 + 2] = p.z;
+                sizes[i] = settings.size * p.sizeVar;
+                seeds[i * 4] = p.seed1;
+                seeds[i * 4 + 1] = p.seed2;
+                seeds[i * 4 + 2] = p.speed;
+                seeds[i * 4 + 3] = p.sizeVar;
+                drifts[i * 3] = p.driftX;
+                drifts[i * 3 + 1] = p.driftY;
+                drifts[i * 3 + 2] = p.driftZ;
             }
             
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('basePosition', new THREE.BufferAttribute(basePositions, 3));
             geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-            geometry.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+            geometry.setAttribute('seeds', new THREE.BufferAttribute(seeds, 4));
+            geometry.setAttribute('drift', new THREE.BufferAttribute(drifts, 3));
             
-            const shapeValue = settings.shape === 'circle' ? 0 : (settings.shape === 'square' ? 1 : 2);
+            const shapeVal = settings.shape === 'circle' ? 0 : (settings.shape === 'square' ? 1 : 2);
             
             const material = new THREE.ShaderMaterial({
                 uniforms: {
                     color: { value: settings.color },
-                    shape: { value: shapeValue },
-                    time: { value: 0 }
+                    shape: { value: shapeVal },
+                    time: { value: 0 },
+                    effectStart: { value: settings.effectStart },
+                    dissipation: { value: settings.dissipation },
+                    floatAway: { value: settings.floatAway },
+                    reference: { value: settings.reference === 'camera' ? 1 : 0 },
+                    cameraPos: { value: camera.position.clone() },
+                    cameraDir: { value: new THREE.Vector3(0, 0, -1) }
                 },
                 vertexShader: `
                     attribute float size;
-                    attribute float alpha;
+                    attribute vec3 basePosition;
+                    attribute vec4 seeds;
+                    attribute vec3 drift;
+                    
+                    uniform float time;
+                    uniform float effectStart;
+                    uniform float dissipation;
+                    uniform float floatAway;
+                    uniform int reference;
+                    uniform vec3 cameraPos;
+                    uniform vec3 cameraDir;
+                    
                     varying float vAlpha;
+                    varying float vDepth;
                     
                     void main() {
-                        vAlpha = alpha;
-                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                        gl_PointSize = size * (80.0 / -mvPosition.z);
+                        vec3 pos = basePosition;
+                        float depth;
+                        
+                        if (reference == 1) {
+                            // Camera reference: depth based on dot with camera direction
+                            vec3 toPoint = normalize(basePosition);
+                            depth = -dot(toPoint, cameraDir); // -1 to 1
+                            depth = (depth + 1.0) / 2.0; // 0 = back, 1 = front
+                        } else {
+                            // Model reference: depth based on z
+                            depth = (basePosition.z + 1.0) / 2.0; // 0 = back, 1 = front
+                        }
+                        
+                        // Effect starts after effectStart threshold
+                        // depth > effectStart = unaffected (front)
+                        // depth < effectStart = affected (back)
+                        float effectZone = 1.0 - effectStart;
+                        float normalizedBack = max(0.0, (effectStart - depth) / effectStart);
+                        
+                        // Float away: increases with normalizedBack
+                        float floatAmount = normalizedBack * normalizedBack * floatAway;
+                        float anim = sin(time * seeds.z + seeds.x) * 0.5 + 0.5;
+                        
+                        pos += drift * floatAmount * (0.5 + anim * 0.5);
+                        pos.y += sin(time * 0.5 + seeds.y) * 0.02 * normalizedBack;
+                        
+                        // Alpha: fades with normalizedBack and dissipation
+                        vAlpha = 1.0 - normalizedBack * dissipation;
+                        vAlpha = clamp(vAlpha, 0.05, 1.0);
+                        
+                        vDepth = depth;
+                        
+                        // Size: smaller toward back
+                        float sizeScale = 1.0 - normalizedBack * 0.5;
+                        
+                        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                        gl_PointSize = size * sizeScale * (80.0 / -mvPosition.z);
                         gl_Position = projectionMatrix * mvPosition;
                     }
                 `,
@@ -330,6 +439,7 @@
                     uniform vec3 color;
                     uniform int shape;
                     varying float vAlpha;
+                    varying float vDepth;
                     
                     void main() {
                         vec2 center = gl_PointCoord - 0.5;
@@ -339,10 +449,10 @@
                         if (shape == 0) {
                             if (dist > 0.5) discard;
                         } else if (shape == 1) {
-                            // square, no discard
+                            // square
                         } else {
                             if (dist > 0.5) discard;
-                            a *= smoothstep(0.5, 0.15, dist);
+                            a *= smoothstep(0.5, 0.1, dist);
                         }
                         
                         gl_FragColor = vec4(color, a);
@@ -359,61 +469,23 @@
             document.getElementById('status').textContent = `${count.toLocaleString()} particles`;
         }
         
-        // Animation loop
+        // Animation
         function animate() {
             requestAnimationFrame(animate);
             time += 0.016;
             
-            if (pointsMesh && particleData.length > 0) {
-                const positions = pointsMesh.geometry.attributes.position.array;
+            if (pointsMesh) {
+                const uniforms = pointsMesh.material.uniforms;
+                uniforms.time.value = time;
+                uniforms.cameraPos.value.copy(camera.position);
                 
-                // Camera reference mode: recalculate based on camera direction
-                if (settings.reference === 'camera') {
-                    const cameraDir = new THREE.Vector3();
-                    camera.getWorldDirection(cameraDir);
-                    
-                    for (let i = 0; i < particleData.length; i++) {
-                        const p = particleData[i];
-                        
-                        // Dot product: how much the particle faces camera
-                        const particlePos = new THREE.Vector3(p.baseX, p.baseY, p.baseZ);
-                        const toCamera = particlePos.clone().normalize();
-                        const facing = -toCamera.dot(cameraDir); // -1 = back, 1 = front
-                        const normalizedFacing = (facing + 1) / 2; // 0 = back, 1 = front
-                        
-                        // Float away for back-facing particles
-                        const backness = 1 - normalizedFacing;
-                        const floatAmount = backness * backness * settings.floatAway;
-                        
-                        // Animated drift
-                        const drift = Math.sin(time * p.speed + p.phase) * 0.5 + 0.5;
-                        
-                        positions[i * 3] = p.baseX + p.offsetX * floatAmount * drift;
-                        positions[i * 3 + 1] = p.baseY + p.offsetY * floatAmount * drift + Math.sin(time + p.phase) * 0.01 * backness;
-                        positions[i * 3 + 2] = p.baseZ + p.offsetZ * floatAmount * drift;
-                    }
-                } else {
-                    // Model reference: float based on model Z
-                    for (let i = 0; i < particleData.length; i++) {
-                        const p = particleData[i];
-                        const backness = 1 - p.normalizedZ;
-                        
-                        // Animated drift
-                        const drift = Math.sin(time * p.speed + p.phase) * 0.3 + 0.7;
-                        
-                        positions[i * 3] = p.baseX + p.offsetX * drift;
-                        positions[i * 3 + 1] = p.baseY + p.offsetY * drift + Math.sin(time * 0.5 + p.phase) * 0.01 * backness;
-                        positions[i * 3 + 2] = p.baseZ + p.offsetZ * drift;
-                    }
-                }
-                
-                pointsMesh.geometry.attributes.position.needsUpdate = true;
-                pointsMesh.material.uniforms.time.value = time;
+                // Camera direction
+                const dir = new THREE.Vector3();
+                camera.getWorldDirection(dir);
+                uniforms.cameraDir.value.copy(dir);
             }
             
-            // Update bloom
             bloomPass.strength = settings.glow;
-            
             controls.update();
             composer.render();
         }
@@ -427,46 +499,56 @@
             composer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Controls
-        document.getElementById('size').addEventListener('input', (e) => {
-            settings.size = parseFloat(e.target.value);
-            createParticles();
-        });
+        // === Control Helpers ===
+        function setupSlider(id, settingKey, isPercent = true, rebuild = false) {
+            const slider = document.getElementById(id);
+            const minInput = document.getElementById(id + 'Min');
+            const maxInput = document.getElementById(id + 'Max');
+            
+            function updateSetting() {
+                const val = parseFloat(slider.value);
+                settings[settingKey] = isPercent ? val / 100 : val;
+                if (rebuild) {
+                    initParticles();
+                } else if (pointsMesh) {
+                    pointsMesh.material.uniforms[settingKey].value = settings[settingKey];
+                }
+            }
+            
+            slider.addEventListener('input', updateSetting);
+            
+            minInput.addEventListener('change', () => {
+                slider.min = minInput.value;
+            });
+            
+            maxInput.addEventListener('change', () => {
+                slider.max = maxInput.value;
+            });
+        }
         
-        document.getElementById('density').addEventListener('input', (e) => {
-            settings.density = e.target.value / 100;
-            createParticles();
-        });
+        // Setup all sliders
+        setupSlider('size', 'size', false, true);
+        setupSlider('density', 'density', true, true);
+        setupSlider('effectStart', 'effectStart', true, false);
+        setupSlider('dissipation', 'dissipation', true, false);
+        setupSlider('floatAway', 'floatAway', true, false);
+        setupSlider('glow', 'glow', true, false);
         
         document.getElementById('shape').addEventListener('change', (e) => {
             settings.shape = e.target.value;
-            createParticles();
+            createMesh();
         });
         
         document.getElementById('reference').addEventListener('change', (e) => {
             settings.reference = e.target.value;
-            createParticles();
-        });
-        
-        document.getElementById('dissipation').addEventListener('input', (e) => {
-            settings.dissipation = e.target.value / 100;
-            createParticles();
-        });
-        
-        document.getElementById('floatAway').addEventListener('input', (e) => {
-            settings.floatAway = e.target.value / 100;
-            createParticles();
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.reference.value = settings.reference === 'camera' ? 1 : 0;
+            }
         });
         
         document.getElementById('color').addEventListener('input', (e) => {
             settings.color = new THREE.Color(e.target.value);
-            if (pointsMesh) {
-                pointsMesh.material.uniforms.color.value = settings.color;
-            }
-        });
-        
-        document.getElementById('glow').addEventListener('input', (e) => {
-            settings.glow = e.target.value / 100;
+            if (pointsMesh) pointsMesh.material.uniforms.color.value = settings.color;
         });
         
         document.getElementById('background').addEventListener('change', (e) => {

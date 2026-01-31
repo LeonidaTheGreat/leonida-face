@@ -187,17 +187,26 @@
         <p>Loading 3D Avatar...</p>
     </div>
 
-    <!-- ElevenLabs API Key Modal -->
-    <div class="modal hidden" id="apiModal">
-        <div class="modal-content">
-            <h2>🔊 Enable Natural Voice</h2>
-            <p style="color:#e0e0e0;margin-bottom:15px;">Enter your ElevenLabs API key for high-quality voice.</p>
-            <input type="password" id="apiKeyInput" placeholder="sk_..." />
-            <button onclick="setApiKey()">Enable Voice</button>
-            <button onclick="skipApiKey()" style="background:#333;color:#888;margin-left:10px;">Skip (Use Browser Voice)</button>
-            <p>Get a free key at <a href="https://elevenlabs.io" target="_blank" style="color:#ffd700;">elevenlabs.io</a></p>
-        </div>
+    <!-- Info banner -->
+    <div class="info-banner" id="infoBanner">
+        Demo uses browser voice. Production version uses ElevenLabs via secure backend.
+        <button onclick="this.parentElement.style.display='none'" style="margin-left:15px;padding:5px 10px;">✕</button>
     </div>
+    <style>
+        .info-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 215, 0, 0.15);
+            color: #ffd700;
+            padding: 10px 20px;
+            text-align: center;
+            font-size: 0.85em;
+            z-index: 100;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+        }
+    </style>
 
     <div class="ui-overlay header">
         <h1>🦁 Leonida</h1>
@@ -253,8 +262,8 @@
             robert: 'https://arweave.net/gwG7w4bY-A5c3R6A6GOz3xBCgbPvkFQmqPIDtvnNsYI'
         };
         
-        const ELEVENLABS_VOICE_ID = 'TxGEqnHWrfWFTfGW9XjX'; // Josh
-        let elevenLabsApiKey = localStorage.getItem('elevenLabsApiKey') || '';
+        // Note: Production uses ElevenLabs via secure Clawdbot backend
+        // Demo uses browser TTS for security
 
         // State
         let scene, camera, renderer, controls;
@@ -551,77 +560,7 @@
             status.textContent = `Mood: ${mood}`;
         };
 
-        // ElevenLabs TTS
-        async function speakElevenLabs(text) {
-            if (!elevenLabsApiKey) {
-                return speakBrowser(text);
-            }
-            
-            status.textContent = 'Speaking...';
-            
-            try {
-                const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
-                    method: 'POST',
-                    headers: {
-                        'xi-api-key': elevenLabsApiKey,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        text: text,
-                        model_id: 'eleven_multilingual_v2',
-                        voice_settings: {
-                            stability: 0.5,
-                            similarity_boost: 0.75
-                        }
-                    })
-                });
-
-                if (!response.ok) throw new Error('ElevenLabs API error');
-
-                const audioBlob = await response.blob();
-                const audioUrl = URL.createObjectURL(audioBlob);
-                
-                await playAudioWithLipSync(audioUrl);
-                URL.revokeObjectURL(audioUrl);
-                
-            } catch (error) {
-                console.error('ElevenLabs error:', error);
-                status.textContent = 'Voice error, using fallback...';
-                await speakBrowser(text);
-            }
-        }
-
-        // Play audio with lip sync
-        async function playAudioWithLipSync(audioUrl) {
-            return new Promise((resolve) => {
-                if (!audioContext) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    analyser = audioContext.createAnalyser();
-                    analyser.fftSize = 256;
-                    analyser.smoothingTimeConstant = 0.8;
-                }
-
-                const audio = new Audio(audioUrl);
-                const source = audioContext.createMediaElementSource(audio);
-                source.connect(analyser);
-                analyser.connect(audioContext.destination);
-
-                audio.onplay = () => { isSpeaking = true; };
-                audio.onended = () => {
-                    isSpeaking = false;
-                    status.textContent = 'Ready';
-                    resolve();
-                };
-                audio.onerror = () => {
-                    isSpeaking = false;
-                    resolve();
-                };
-
-                audio.play();
-            });
-        }
-
-        // Browser TTS fallback
+        // Browser TTS (production uses ElevenLabs via Clawdbot backend)
         async function speakBrowser(text) {
             return new Promise((resolve) => {
                 status.textContent = 'Speaking (browser voice)...';
@@ -656,13 +595,9 @@
             setTimeout(simulateLipSync, 80 + Math.random() * 80);
         }
 
-        // Speak function
+        // Speak function (browser TTS for demo)
         async function speak(text) {
-            if (elevenLabsApiKey) {
-                await speakElevenLabs(text);
-            } else {
-                await speakBrowser(text);
-            }
+            await speakBrowser(text);
         }
 
         // Test speak
@@ -703,22 +638,6 @@
             if (AVATARS[key]) loadAvatar(AVATARS[key]);
         };
 
-        // API key handling
-        window.setApiKey = function() {
-            const key = document.getElementById('apiKeyInput').value.trim();
-            if (key) {
-                elevenLabsApiKey = key;
-                localStorage.setItem('elevenLabsApiKey', key);
-                document.getElementById('apiModal').classList.add('hidden');
-                addMessage('✓ ElevenLabs voice enabled!', 'system');
-            }
-        };
-
-        window.skipApiKey = function() {
-            document.getElementById('apiModal').classList.add('hidden');
-            addMessage('Using browser voice. Click settings to enable ElevenLabs later.', 'system');
-        };
-
         // Animation loop
         function animate() {
             requestAnimationFrame(animate);
@@ -746,13 +665,6 @@
         initScene();
         loadAvatar(AVATARS.rose);
         animate();
-
-        // Show API modal if no key
-        if (!elevenLabsApiKey) {
-            setTimeout(() => {
-                document.getElementById('apiModal').classList.remove('hidden');
-            }, 2000);
-        }
     </script>
 </body>
 </html>

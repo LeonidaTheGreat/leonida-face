@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leonida - Voxel Head</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #fff;
+        }
+        #container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        .status {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8em;
+            color: rgba(100, 150, 255, 0.6);
+            letter-spacing: 0.1em;
+            z-index: 10;
+        }
+        
+        .fps {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            font-size: 0.75em;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: monospace;
+            z-index: 10;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+        }
+        .controls button {
+            padding: 10px 20px;
+            background: rgba(100, 150, 255, 0.2);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+        .controls button:hover {
+            background: rgba(100, 150, 255, 0.3);
+        }
+        .controls input[type="range"] {
+            width: 150px;
+        }
+        .controls label {
+            font-size: 0.75em;
+            color: rgba(255,255,255,0.6);
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div class="fps" id="fps">-- FPS</div>
+    <div class="status" id="status">Loading model...</div>
+    
+    <div class="controls">
+        <button id="disassembleBtn">Disassemble</button>
+        <button id="assembleBtn">Assemble</button>
+        <label>Disintegration <input type="range" id="disintegration" min="0" max="100" value="0"></label>
+        <label>Particle Size <input type="range" id="particleSize" min="1" max="20" value="8"></label>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        
+        // Scene setup
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 4);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+        
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+        
+        const backLight = new THREE.DirectionalLight(0x4060ff, 0.5);
+        backLight.position.set(-5, 0, -5);
+        scene.add(backLight);
+        
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 1.5;
+        controls.maxDistance = 10;
+        
+        // State
+        let time = 0;
+        let instancedMesh = null;
+        let originalPositions = [];
+        let targetPositions = [];
+        let velocities = [];
+        let particleCount = 0;
+        let disintegrationAmount = 0;
+        let targetDisintegration = 0;
+        let particleSize = 0.02;
+        
+        // Lines for constellation effect
+        let linesMesh = null;
+        
+        // FPS tracking
+        let frameCount = 0;
+        let lastFpsUpdate = performance.now();
+        
+        // Generate head points using parametric approach (will replace with model later)
+        function generateHeadPoints(count = 8000) {
+            const points = [];
+            
+            // Better head shape function
+            function getHeadSurface(u, v) {
+                const theta = u * Math.PI * 2;
+                const phi = v * Math.PI;
+                
+                // Base sphere
+                let x = Math.sin(phi) * Math.cos(theta);
+                let y = Math.cos(phi);
+                let z = Math.sin(phi) * Math.sin(theta);
+                
+                // Deform to head shape
+                // Narrower jaw
+                if (y < -0.3) {
+                    const jawFactor = 1 - ((-0.3 - y) * 0.8);
+                    x *= Math.max(0.3, jawFactor);
+                    z *= Math.max(0.4, jawFactor);
+                }
+                
+                // Wider at temples
+                if (y > -0.2 && y < 0.3) {
+                    x *= 1.05;
+                }
+                
+                // Flatter face
+                if (z > 0.3) {
+                    z = 0.3 + (z - 0.3) * 0.6;
+                }
+                
+                // Brow ridge
+                if (y > 0.1 && y < 0.35 && z > 0.4) {
+                    z += 0.08 * Math.max(0, 1 - Math.abs(y - 0.22) * 6);
+                }
+                
+                // Nose
+                if (Math.abs(x) < 0.12 && y > -0.3 && y < 0.15 && z > 0.3) {
+                    const noseFactor = (1 - Math.abs(x) * 6) * (1 - Math.abs(y) * 2);
+                    z += 0.2 * Math.max(0, noseFactor);
+                }
+                
+                // Eye sockets
+                const leftEye = Math.sqrt((x + 0.25) ** 2 + (y - 0.1) ** 2);
+                const rightEye = Math.sqrt((x - 0.25) ** 2 + (y - 0.1) ** 2);
+                if (leftEye < 0.12) z -= (0.12 - leftEye) * 0.8;
+                if (rightEye < 0.12) z -= (0.12 - rightEye) * 0.8;
+                
+                // Cheekbones
+                if (Math.abs(x) > 0.3 && Math.abs(x) < 0.5 && y > -0.15 && y < 0.1 && z > 0.2) {
+                    z += 0.06;
+                }
+                
+                // Mouth indent
+                if (Math.abs(x) < 0.15 && y > -0.5 && y < -0.3 && z > 0.4) {
+                    z -= 0.05;
+                }
+                
+                // Scale
+                x *= 0.8;
+                z *= 0.75;
+                
+                return { x, y, z };
+            }
+            
+            // Sample surface
+            for (let i = 0; i < count; i++) {
+                const u = Math.random();
+                const v = Math.random();
+                const p = getHeadSurface(u, v);
+                
+                // Add some surface noise for organic feel
+                const noise = 0.01;
+                p.x += (Math.random() - 0.5) * noise;
+                p.y += (Math.random() - 0.5) * noise;
+                p.z += (Math.random() - 0.5) * noise;
+                
+                points.push(p);
+            }
+            
+            // Add neck
+            for (let i = 0; i < count * 0.2; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const height = -1 - Math.random() * 0.6;
+                const radius = 0.25 + Math.random() * 0.05 + (height + 1) * 0.1;
+                
+                points.push({
+                    x: Math.cos(angle) * radius,
+                    y: height,
+                    z: Math.sin(angle) * radius * 0.8
+                });
+            }
+            
+            return points;
+        }
+        
+        // Create instanced cubes
+        function createVoxelHead(points) {
+            particleCount = points.length;
+            
+            // Cube geometry
+            const cubeSize = particleSize;
+            const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+            
+            // Material with color variation
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x4080ff,
+                shininess: 30,
+                transparent: true,
+                opacity: 0.95
+            });
+            
+            // Instanced mesh
+            instancedMesh = new THREE.InstancedMesh(geometry, material, particleCount);
+            
+            // Set up positions
+            originalPositions = [];
+            targetPositions = [];
+            velocities = [];
+            
+            const dummy = new THREE.Object3D();
+            const color = new THREE.Color();
+            
+            for (let i = 0; i < particleCount; i++) {
+                const p = points[i];
+                
+                dummy.position.set(p.x, p.y, p.z);
+                dummy.rotation.set(
+                    Math.random() * 0.2,
+                    Math.random() * 0.2,
+                    Math.random() * 0.2
+                );
+                dummy.updateMatrix();
+                instancedMesh.setMatrixAt(i, dummy.matrix);
+                
+                // Color variation (blue shades)
+                const hue = 0.58 + Math.random() * 0.08;
+                const sat = 0.5 + Math.random() * 0.3;
+                const light = 0.4 + Math.random() * 0.3;
+                color.setHSL(hue, sat, light);
+                instancedMesh.setColorAt(i, color);
+                
+                // Store positions
+                originalPositions.push({ x: p.x, y: p.y, z: p.z });
+                targetPositions.push({ x: p.x, y: p.y, z: p.z });
+                velocities.push({ x: 0, y: 0, z: 0 });
+            }
+            
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            instancedMesh.instanceColor.needsUpdate = true;
+            
+            scene.add(instancedMesh);
+            
+            // Create constellation lines (initially hidden)
+            createConstellationLines();
+        }
+        
+        function createConstellationLines() {
+            if (linesMesh) scene.remove(linesMesh);
+            
+            const linePositions = [];
+            const maxDist = 0.15;
+            
+            // Connect nearby particles (sparse sampling for performance)
+            for (let i = 0; i < Math.min(particleCount, 2000); i += 3) {
+                const p1 = originalPositions[i];
+                
+                for (let j = i + 1; j < Math.min(particleCount, 2000); j += 3) {
+                    const p2 = originalPositions[j];
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    const dz = p1.z - p2.z;
+                    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                    
+                    if (dist < maxDist && Math.random() < 0.3) {
+                        linePositions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+                    }
+                }
+            }
+            
+            const lineGeometry = new THREE.BufferGeometry();
+            lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+            
+            const lineMaterial = new THREE.LineBasicMaterial({
+                color: 0x6090ff,
+                transparent: true,
+                opacity: 0
+            });
+            
+            linesMesh = new THREE.LineSegments(lineGeometry, lineMaterial);
+            scene.add(linesMesh);
+        }
+        
+        // Disintegration effect
+        function setDisintegration(amount) {
+            targetDisintegration = amount;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const orig = originalPositions[i];
+                
+                // Disintegrate from the back/left
+                const disintegrateFactor = Math.max(0, amount - (orig.z + 0.5) * 0.5 - (orig.x + 0.5) * 0.3);
+                
+                if (disintegrateFactor > 0) {
+                    // Scatter direction
+                    const scatterDist = disintegrateFactor * 3;
+                    const angle = Math.atan2(orig.z, orig.x) + (Math.random() - 0.5) * 1;
+                    const upward = (Math.random() - 0.3) * scatterDist;
+                    
+                    targetPositions[i] = {
+                        x: orig.x - Math.cos(angle) * scatterDist + (Math.random() - 0.5) * scatterDist,
+                        y: orig.y + upward,
+                        z: orig.z - Math.sin(angle) * scatterDist * 0.5 + (Math.random() - 0.5) * scatterDist
+                    };
+                } else {
+                    targetPositions[i] = { ...orig };
+                }
+            }
+        }
+        
+        // Animation loop
+        const dummy = new THREE.Object3D();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            time += 0.016;
+            
+            // FPS counter
+            frameCount++;
+            const now = performance.now();
+            if (now - lastFpsUpdate >= 1000) {
+                document.getElementById('fps').textContent = `${frameCount} FPS`;
+                frameCount = 0;
+                lastFpsUpdate = now;
+            }
+            
+            // Update particle positions
+            if (instancedMesh) {
+                for (let i = 0; i < particleCount; i++) {
+                    const target = targetPositions[i];
+                    const orig = originalPositions[i];
+                    
+                    // Get current position from matrix
+                    instancedMesh.getMatrixAt(i, dummy.matrix);
+                    dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+                    
+                    // Smooth interpolation to target
+                    dummy.position.x += (target.x - dummy.position.x) * 0.05;
+                    dummy.position.y += (target.y - dummy.position.y) * 0.05;
+                    dummy.position.z += (target.z - dummy.position.z) * 0.05;
+                    
+                    // Subtle floating motion
+                    const floatOffset = Math.sin(time * 2 + i * 0.1) * 0.003;
+                    dummy.position.y += floatOffset;
+                    
+                    // Rotation for scattered particles
+                    const dist = Math.sqrt(
+                        (dummy.position.x - orig.x) ** 2 +
+                        (dummy.position.y - orig.y) ** 2 +
+                        (dummy.position.z - orig.z) ** 2
+                    );
+                    
+                    if (dist > 0.1) {
+                        dummy.rotation.x += 0.02;
+                        dummy.rotation.y += 0.01;
+                    }
+                    
+                    dummy.updateMatrix();
+                    instancedMesh.setMatrixAt(i, dummy.matrix);
+                }
+                
+                instancedMesh.instanceMatrix.needsUpdate = true;
+            }
+            
+            // Update line opacity based on disintegration
+            if (linesMesh) {
+                linesMesh.material.opacity = disintegrationAmount * 0.4;
+            }
+            
+            // Smooth disintegration transition
+            disintegrationAmount += (targetDisintegration - disintegrationAmount) * 0.05;
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Controls
+        document.getElementById('disassembleBtn').addEventListener('click', () => {
+            setDisintegration(1);
+        });
+        
+        document.getElementById('assembleBtn').addEventListener('click', () => {
+            setDisintegration(0);
+        });
+        
+        document.getElementById('disintegration').addEventListener('input', (e) => {
+            setDisintegration(e.target.value / 100);
+        });
+        
+        document.getElementById('particleSize').addEventListener('input', (e) => {
+            particleSize = e.target.value / 400;
+            // Rebuild
+            if (instancedMesh) {
+                scene.remove(instancedMesh);
+                const points = generateHeadPoints(6000);
+                createVoxelHead(points);
+            }
+        });
+        
+        // Initialize
+        const points = generateHeadPoints(6000);
+        createVoxelHead(points);
+        document.getElementById('status').textContent = `${particleCount} particles`;
+        animate();
+    </script>
+</body>
+</html>

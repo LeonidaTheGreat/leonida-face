@@ -16,18 +16,23 @@
 - "🧲 Assemble" - brings particles back to original positions
 - Smooth animation transition between states
 
-### 4. ✅ Added Model Selector
+### 4. ✅ Added Head Animation
+- "🎭 Animate" button toggles subtle head movement
+- Rotation left/right, slight nod, forward/back movement
+- Creates nice particle dissipation trails as head moves
+
+### 5. ✅ Added Model Selector
 - **Walt Head** - original head model
 - **Female (Full Body)** - from Three.js examples
 - **Male (Full Body)** - from Three.js examples
 - Camera auto-adjusts for full body models
 
-### 5. ✅ Added Float Direction Slider
+### 6. ✅ Added Float Direction Slider
 - Controls particle float direction relative to camera
 - 0 = random (filtered to avoid toward-camera)
 - 100 = all particles go away from camera
 
-### 6. ✅ Added Interior Fill Slider
+### 7. ✅ Added Interior Fill Slider
 - Adds particles inside the volume
 - Independent from surface density
 

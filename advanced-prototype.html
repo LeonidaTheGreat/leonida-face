@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leonida - TalkingHead Integration</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            padding: 30px 0;
+        }
+        header h1 {
+            font-size: 2.5em;
+            background: linear-gradient(90deg, #ffd700, #ff6b35);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        @media (max-width: 800px) {
+            .main { grid-template-columns: 1fr; }
+        }
+        #avatar-container {
+            width: 100%;
+            height: 500px;
+            background: radial-gradient(circle at 50% 30%, #2d3a5a, #1a1a2e);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+        .chat-panel {
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+        }
+        .messages {
+            flex: 1;
+            background: rgba(0,0,0,0.3);
+            border-radius: 15px;
+            padding: 20px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+        .msg { margin: 10px 0; padding: 12px; border-radius: 10px; max-width: 85%; }
+        .msg.user { background: #3b82f6; margin-left: auto; }
+        .msg.bot { background: rgba(255,255,255,0.1); }
+        .msg.system { background: rgba(255,215,0,0.1); font-style: italic; border-left: 3px solid #ffd700; }
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 1em;
+        }
+        button {
+            padding: 15px 25px;
+            background: linear-gradient(135deg, #ffd700, #ff6b35);
+            border: none;
+            border-radius: 10px;
+            color: #1a1a2e;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover { transform: translateY(-2px); }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .controls button {
+            background: rgba(255,255,255,0.1);
+            color: #e0e0e0;
+            padding: 10px 20px;
+        }
+        #status {
+            text-align: center;
+            padding: 10px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🦁 Leonida</h1>
+            <p>AI Assistant with Visual Presence</p>
+        </header>
+
+        <div class="main">
+            <div id="avatar-container">
+                <!-- TalkingHead 3D avatar renders here -->
+                <div id="loading" style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;">
+                    Loading 3D Avatar...
+                </div>
+            </div>
+
+            <div class="chat-panel">
+                <div class="messages" id="messages">
+                    <div class="msg system">
+                        TalkingHead integration ready. This version uses Ready Player Me avatars with lip-sync.
+                    </div>
+                </div>
+                <div class="input-row">
+                    <input type="text" id="input" placeholder="Type a message..." />
+                    <button onclick="send()">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button onclick="head.setMood('happy')">😊 Happy</button>
+            <button onclick="head.setMood('angry')">😠 Angry</button>
+            <button onclick="head.setMood('sad')">😢 Sad</button>
+            <button onclick="head.setMood('neutral')">😐 Neutral</button>
+            <button onclick="testSpeak()">🔊 Test Voice</button>
+            <button onclick="head.playAnimation('Idle')">💤 Idle</button>
+            <button onclick="head.playAnimation('Talking')">💬 Talking</button>
+        </div>
+
+        <div id="status">Avatar Status: Initializing...</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+            "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.7/modules/talkinghead.mjs"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import { TalkingHead } from 'talkinghead';
+
+        let head = null;
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+        const input = document.getElementById('input');
+
+        // Configuration
+        const CONFIG = {
+            // Default avatar - replace with custom Leonida avatar URL
+            avatarUrl: 'https://models.readyplayer.me/64bfa15f0e72c63d7c3934a6.glb?morphTargets=ARKit,Oculus Visemes',
+            
+            // ElevenLabs settings (already configured in Clawdbot)
+            elevenLabsVoiceId: 'TxGEqnHWrfWFTfGW9XjX', // Josh
+            elevenLabsModel: 'eleven_multilingual_v2',
+            
+            // TTS settings
+            ttsLang: 'en-US',
+            lipsyncLang: 'en'
+        };
+
+        async function initAvatar() {
+            try {
+                status.textContent = 'Avatar Status: Loading TalkingHead...';
+                
+                const container = document.getElementById('avatar-container');
+                
+                head = new TalkingHead(container, {
+                    // Use built-in Google TTS or configure ElevenLabs
+                    lipsyncModules: ['en'],
+                    lipsyncLang: 'en',
+                    cameraView: 'upper',
+                    cameraDistance: 0,
+                    avatarMood: 'neutral',
+                    lightAmbientIntensity: 2,
+                    lightDirectIntensity: 30
+                });
+
+                // Make head available globally for control buttons
+                window.head = head;
+
+                status.textContent = 'Avatar Status: Loading 3D model...';
+                document.getElementById('loading').style.display = 'none';
+
+                // Load the avatar
+                await head.showAvatar({
+                    url: CONFIG.avatarUrl,
+                    body: 'F', // F = female body, M = male body
+                    avatarMood: 'neutral',
+                    lipsyncLang: 'en'
+                });
+
+                status.textContent = 'Avatar Status: Ready ✓';
+                addMessage('Avatar loaded! Try the mood buttons or type a message.', 'system');
+
+            } catch (error) {
+                console.error('Avatar init error:', error);
+                status.textContent = 'Avatar Status: Error - ' + error.message;
+                document.getElementById('loading').innerHTML = `
+                    <div style="text-align:center;padding:40px;">
+                        <p style="color:#ff6b6b;">Failed to load 3D avatar</p>
+                        <p style="font-size:0.9em;margin-top:10px;">Error: ${error.message}</p>
+                        <p style="font-size:0.8em;margin-top:20px;color:#888;">
+                            Make sure you have a compatible avatar URL.<br>
+                            Create one at <a href="https://readyplayer.me" target="_blank" style="color:#ffd700;">readyplayer.me</a>
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        function addMessage(text, type) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.textContent = text;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        window.testSpeak = async function() {
+            if (!head) {
+                addMessage('Avatar not loaded yet', 'system');
+                return;
+            }
+            
+            const text = "Hello! I'm Leonida, your AI assistant. I now have a visual presence and can express emotions through my avatar.";
+            addMessage(text, 'bot');
+            
+            try {
+                // Use TalkingHead's built-in speak method
+                // This handles lip-sync automatically
+                await head.speak(text);
+            } catch (error) {
+                console.error('Speak error:', error);
+                // Fallback to Web Speech API
+                const utterance = new SpeechSynthesisUtterance(text);
+                speechSynthesis.speak(utterance);
+            }
+        };
+
+        window.send = async function() {
+            const text = input.value.trim();
+            if (!text) return;
+            
+            addMessage(text, 'user');
+            input.value = '';
+            
+            // In production, this would call Clawdbot API
+            // For now, simulate response
+            setTimeout(() => {
+                const response = "I received your message! In the full integration, I'll connect to Clawdbot to generate real responses.";
+                addMessage(response, 'bot');
+                if (head) {
+                    head.speak(response).catch(console.error);
+                }
+            }, 1000);
+        };
+
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') send();
+        });
+
+        // Initialize
+        initAvatar();
+    </script>
+</body>
+</html>

@@ -165,7 +165,7 @@
         
         <div class="slider-row">
             <label>Volume vs Surface (0 = surface only)</label>
-            <input type="range" id="volumeDensity" min="0" max="100" value="0">
+            <input type="range" id="volumeDensity" min="0" max="100" value="100">
             <div class="range-inputs">
                 <input type="number" id="volumeDensityMin" value="0"> 
                 <span>-</span>
@@ -343,7 +343,7 @@
             density: 90,
             densityMin: 1,
             densityMax: 200,
-            volumeDensity: 0,
+            volumeDensity: 100,
             volumeDensityMin: 0,
             volumeDensityMax: 100,
             shape: 'soft',
@@ -557,16 +557,15 @@
                     // For partial passes, randomly include
                     if (isLastPass && Math.random() > lastPassChance) continue;
                     
-                    // Surface vs Volume filtering
-                    // surfaceScore: 1 = on surface, <1 = interior
-                    const surfaceScore = vertexSurfaceScore[i] !== undefined ? vertexSurfaceScore[i] : 1;
-                    const surfaceThreshold = 0.7; // Consider "surface" if > 70% of max radius
-                    
-                    if (surfaceScore < surfaceThreshold) {
-                        // This is an interior vertex
-                        // Only keep if volumeDensity allows it
-                        const interiorChance = volumeThreshold;
-                        if (Math.random() > interiorChance) continue;
+                    // Surface vs Volume filtering (only if volumeDensity < 100)
+                    if (volumeThreshold < 1.0 && vertexSurfaceScore.length > 0) {
+                        const surfaceScore = vertexSurfaceScore[i] !== undefined ? vertexSurfaceScore[i] : 1;
+                        const surfaceThreshold = 0.6; // Consider "surface" if > 60% of max radius
+                        
+                        if (surfaceScore < surfaceThreshold) {
+                            // This is an interior vertex - skip unless volume density allows
+                            if (Math.random() > volumeThreshold) continue;
+                        }
                     }
                     
                     const v = allVertices[i];

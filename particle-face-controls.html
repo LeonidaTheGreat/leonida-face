@@ -227,6 +227,10 @@
                 <button class="btn" data-state="thinking">Thinking</button>
                 <button class="btn" data-state="speaking">Speaking</button>
             </div>
+            <div class="control-row" style="margin-top: 12px;">
+                <label>Mouth Open <span class="value-display" id="mouthVal">0%</span></label>
+                <input type="range" id="mouthOpen" min="0" max="100" value="0">
+            </div>
         </div>
         
         <!-- Expression -->
@@ -377,7 +381,8 @@
             assembled: true,             // assembly state
             showConstellation: true,     // constellation lines visible
             constellationOpacity: 1.0,   // for animation
-            depthDensity: true           // denser particles at front
+            depthDensity: true,          // denser particles at front
+            mouthOpen: 0                 // 0 = closed, 1 = fully open (for lip sync)
         };
         
         // Color presets
@@ -446,7 +451,7 @@
             const colors = [];
             const sizes = [];
             const originalPos = [];
-            const types = []; // 0=face, 1=eye, 2=mouth, 3=ambient, 4=mane
+            const types = []; // 0=face, 1=eye, 2=upperMouth, 3=ambient, 4=mane, 5=lowerMouth/jaw
             
             const baseCount = Math.round(12000 * config.density); // High density for stippled look
             
@@ -672,7 +677,7 @@
                 types.push(2);
             }
             
-            // Mouth - lower lip (fuller)
+            // Mouth - lower lip (fuller) - TYPE 5 for jaw movement
             for (let i = 0; i < Math.round(120 * config.density); i++) {
                 const t = (i / 120) - 0.5;
                 const x = t * mouthWidth * 1.8;
@@ -686,10 +691,10 @@
                 originalPos.push(x, y + scatter, z);
                 colors.push(config.colorPrimary.r * 0.85, config.colorPrimary.g * 0.45, config.colorPrimary.b * 0.55);
                 sizes.push((0.016 + Math.random() * 0.01) * config.particleSize);
-                types.push(2);
+                types.push(5); // Lower mouth - moves with jaw
             }
             
-            // Chin
+            // Chin - TYPE 5 for jaw movement
             for (let i = 0; i < Math.round(150 * config.density); i++) {
                 const angle = (Math.random() - 0.5) * Math.PI * 0.6;
                 const t = Math.random();
@@ -701,10 +706,10 @@
                 originalPos.push(x, y, z);
                 colors.push(config.colorPrimary.r * 0.9, config.colorPrimary.g * 0.9, config.colorPrimary.b * 0.9);
                 sizes.push((0.014 + Math.random() * 0.01) * config.particleSize);
-                types.push(0);
+                types.push(5); // Chin - moves with jaw
             }
             
-            // Jaw line
+            // Jaw line - TYPE 5 for jaw movement (front part), TYPE 0 for back
             for (let i = 0; i < Math.round(200 * config.density); i++) {
                 const t = (i / 200); // 0 to 1, left to right
                 const side = t < 0.5 ? -1 : 1;
@@ -721,7 +726,8 @@
                 originalPos.push(x + scatter * 0.5, y + scatter, z + scatter * 0.3);
                 colors.push(config.colorPrimary.r * 0.85, config.colorPrimary.g * 0.85, config.colorPrimary.b * 0.85);
                 sizes.push((0.013 + Math.random() * 0.01) * config.particleSize);
-                types.push(0);
+                // Front jaw moves more, back jaw less
+                types.push(tNorm < 0.5 ? 5 : 0);
             }
             
             // Neck - cylinder tapering down from chin
@@ -864,6 +870,7 @@
             geometry.setAttribute('position', new THREE.Float32BufferAttribute(faceData.points, 3));
             geometry.setAttribute('color', new THREE.Float32BufferAttribute(faceData.colors, 3));
             geometry.setAttribute('size', new THREE.Float32BufferAttribute(faceData.sizes, 1));
+            geometry.setAttribute('particleType', new THREE.Float32BufferAttribute(faceData.types, 1));
             
             originalPositions = new Float32Array(faceData.originalPositions);
             particleTypes = new Float32Array(faceData.types);
@@ -874,6 +881,7 @@
                 uniforms: {
                     time: { value: 0 },
                     speakIntensity: { value: 0 },
+                    mouthOpen: { value: 0 }, // 0 = closed, 1 = fully open
                     moodHappy: { value: 0 },
                     moodCurious: { value: 0 },
                     moodFocused: { value: 0 },
@@ -884,10 +892,12 @@
                 vertexShader: `
                     attribute float size;
                     attribute vec3 color;
+                    attribute float particleType;
                     varying vec3 vColor;
                     varying float vAlpha;
                     uniform float time;
                     uniform float speakIntensity;
+                    uniform float mouthOpen;
                     uniform float moodHappy;
                     uniform float breathSpeed;
                     uniform float noiseIntensity;
@@ -919,15 +929,29 @@
                             pos.z += cos(time * 2.0 + length(position.xy) * 5.0) * 0.02;
                         }
                         
-                        // Speaking (mouth area)
-                        if (position.y < -0.3 && position.y > -0.6 && abs(position.x) < 0.3) {
-                            pos.y += sin(time * 25.0 + position.x * 10.0) * speakIntensity * 0.05;
-                            pos.z += speakIntensity * 0.02;
+                        // Mouth/Jaw movement based on mouthOpen
+                        // Type 5 = lower mouth/chin/jaw - moves down and slightly back
+                        if (particleType == 5.0) {
+                            // Jaw rotates down from a pivot near the ears
+                            // Simplified: just move down and back proportionally
+                            float jawDrop = mouthOpen * 0.15; // How far down
+                            float jawBack = mouthOpen * 0.03; // Slight backward rotation
+                            pos.y -= jawDrop;
+                            pos.z -= jawBack;
+                        }
+                        // Type 2 = upper mouth - slight movement
+                        if (particleType == 2.0) {
+                            pos.y += mouthOpen * 0.02; // Upper lip raises slightly
                         }
                         
-                        // Happy smile
-                        if (moodHappy > 0.0 && position.y < -0.3 && position.y > -0.6) {
-                            float smileOffset = (1.0 - abs(position.x) * 2.0) * moodHappy * 0.1;
+                        // Additional speaking vibration when mouth is moving
+                        if ((particleType == 5.0 || particleType == 2.0) && speakIntensity > 0.0) {
+                            pos.y += sin(time * 30.0 + position.x * 15.0) * speakIntensity * 0.01;
+                        }
+                        
+                        // Happy smile - raises corners of mouth
+                        if (moodHappy > 0.0 && (particleType == 2.0 || particleType == 5.0)) {
+                            float smileOffset = abs(position.x) * moodHappy * 0.08;
                             pos.y += smileOffset;
                         }
                         
@@ -1061,6 +1085,7 @@
                 const uniforms = particles.material.uniforms;
                 uniforms.time.value = time;
                 uniforms.speakIntensity.value = speakIntensity;
+                uniforms.mouthOpen.value = config.mouthOpen;
                 uniforms.moodHappy.value = config.mood === 'happy' ? 1 : 0;
                 uniforms.moodCurious.value = config.mood === 'curious' ? 1 : 0;
                 uniforms.moodFocused.value = config.mood === 'focused' ? 1 : 0;
@@ -1071,11 +1096,19 @@
                 uniforms.state.value = stateMap[config.state] || 0;
             }
             
-            // Speaking state auto-animates mouth
+            // Speaking state auto-animates mouth with realistic lip sync pattern
             if (config.state === 'speaking') {
-                speakIntensity = 0.5 + Math.sin(time * 10) * 0.3;
+                speakIntensity = 0.3 + Math.random() * 0.2;
+                // Varied mouth opening for natural speech - multiple frequencies
+                const slow = Math.sin(time * 4) * 0.3;
+                const mid = Math.sin(time * 8) * 0.25;
+                const fast = Math.sin(time * 15) * 0.15;
+                const noise = (Math.random() - 0.5) * 0.1;
+                config.mouthOpen = Math.max(0, Math.min(1, 0.4 + slow + mid + fast + noise));
             } else {
                 speakIntensity *= 0.95;
+                // Smoothly close mouth when not speaking
+                config.mouthOpen *= 0.9;
             }
             
             // Smooth eye follow
@@ -1158,6 +1191,19 @@
                     e.target.classList.add('active');
                     config.mood = e.target.dataset.mood;
                 });
+            });
+            
+            // Mouth open slider (manual control - overrides auto when not speaking)
+            document.getElementById('mouthOpen').addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                config.mouthOpen = val / 100;
+                document.getElementById('mouthVal').textContent = `${val}%`;
+                // If manually adjusting, set state to idle to prevent auto-override
+                if (config.state === 'speaking') {
+                    document.querySelectorAll('[data-state]').forEach(b => b.classList.remove('active'));
+                    document.querySelector('[data-state="idle"]').classList.add('active');
+                    config.state = 'idle';
+                }
             });
             
             // Sliders

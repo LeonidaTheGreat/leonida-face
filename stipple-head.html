@@ -559,13 +559,13 @@
                     
                     // Surface vs Volume filtering
                     // surfaceScore: 1 = on surface, <1 = interior
-                    const surfaceScore = vertexSurfaceScore[i] || 1;
-                    const surfaceThreshold = 0.85; // Consider "surface" if > 85% of max radius
+                    const surfaceScore = vertexSurfaceScore[i] !== undefined ? vertexSurfaceScore[i] : 1;
+                    const surfaceThreshold = 0.7; // Consider "surface" if > 70% of max radius
                     
                     if (surfaceScore < surfaceThreshold) {
                         // This is an interior vertex
                         // Only keep if volumeDensity allows it
-                        const interiorChance = volumeThreshold * surfaceScore;
+                        const interiorChance = volumeThreshold;
                         if (Math.random() > interiorChance) continue;
                     }
                     

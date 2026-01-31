@@ -3,240 +3,418 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leonida - 3D Anime Avatar v2</title>
+    <title>Leonida - Premium 3D Avatar</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --gold: #ffd700;
+            --gold-light: #ffe44d;
+            --gold-dark: #b8860b;
+            --purple: #8b5cf6;
+            --purple-dark: #6d28d9;
+            --bg-dark: #0a0a12;
+            --bg-mid: #12121e;
+            --text: #e8e8f0;
+            --text-dim: #8888a0;
+        }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
             min-height: 100vh;
-            color: #e0e0e0;
+            color: var(--text);
             overflow: hidden;
         }
+        
         #canvas-container {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            background: radial-gradient(ellipse at center bottom, #1a1a2e 0%, #0a0a12 70%);
         }
+        
+        /* Animated background gradient */
+        #canvas-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse 80% 50% at 50% 100%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 30% at 30% 80%, rgba(255, 215, 0, 0.08) 0%, transparent 40%);
+            pointer-events: none;
+            animation: bgPulse 8s ease-in-out infinite;
+        }
+        
+        @keyframes bgPulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+        
         .ui-overlay {
             position: fixed;
             z-index: 10;
             pointer-events: none;
         }
         .ui-overlay > * { pointer-events: auto; }
+        
+        /* Header */
         .header {
-            top: 20px;
+            top: 24px;
             left: 50%;
             transform: translateX(-50%);
             text-align: center;
         }
         .header h1 {
-            font-size: 2em;
-            background: linear-gradient(90deg, #ffd700, #ff6b35);
+            font-size: 2.2em;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 50%, var(--gold) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 40px rgba(255, 215, 0, 0.3);
+            letter-spacing: 0.05em;
         }
+        .header .subtitle {
+            font-size: 0.85em;
+            color: var(--text-dim);
+            margin-top: 4px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+        
+        /* Chat Panel */
         .chat-panel {
-            bottom: 20px;
+            bottom: 24px;
             left: 50%;
             transform: translateX(-50%);
-            width: min(600px, 90vw);
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
+            width: min(560px, 92vw);
+            background: rgba(18, 18, 30, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
             padding: 20px;
-            border: 1px solid rgba(255, 215, 0, 0.2);
+            border: 1px solid rgba(255, 215, 0, 0.15);
+            box-shadow: 
+                0 0 60px rgba(0, 0, 0, 0.5),
+                0 0 40px rgba(139, 92, 246, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
         }
+        
         .messages {
-            max-height: 120px;
+            max-height: 140px;
             overflow-y: auto;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--gold-dark) transparent;
         }
+        .messages::-webkit-scrollbar { width: 4px; }
+        .messages::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 2px; }
+        
         .msg {
-            margin: 8px 0;
-            padding: 10px 15px;
-            border-radius: 15px;
+            margin: 10px 0;
+            padding: 12px 18px;
+            border-radius: 18px;
             max-width: 85%;
-            animation: fadeIn 0.3s ease;
+            animation: msgIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
             font-size: 0.95em;
+            line-height: 1.5;
         }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        
+        @keyframes msgIn {
+            from { 
+                opacity: 0; 
+                transform: translateY(15px) scale(0.95); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0) scale(1); 
+            }
         }
-        .msg.user { background: linear-gradient(135deg, #3b82f6, #2563eb); margin-left: auto; }
-        .msg.bot { background: rgba(255, 255, 255, 0.1); }
-        .msg.system { background: rgba(255, 215, 0, 0.1); font-size: 0.85em; color: #ffd700; text-align: center; max-width: 100%; }
-        .input-row { display: flex; gap: 10px; }
+        
+        .msg.user { 
+            background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%);
+            margin-left: auto;
+            border-bottom-right-radius: 6px;
+        }
+        .msg.bot { 
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-bottom-left-radius: 6px;
+        }
+        .msg.system { 
+            background: rgba(255, 215, 0, 0.08);
+            border: 1px solid rgba(255, 215, 0, 0.15);
+            font-size: 0.85em;
+            color: var(--gold);
+            text-align: center;
+            max-width: 100%;
+        }
+        
+        .input-row { 
+            display: flex; 
+            gap: 12px; 
+        }
+        
         input[type="text"] {
             flex: 1;
-            padding: 15px 20px;
-            border: none;
-            border-radius: 25px;
-            background: rgba(255, 255, 255, 0.1);
+            padding: 16px 22px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.05);
             color: #fff;
             font-size: 1em;
             outline: none;
+            transition: all 0.3s ease;
         }
-        input:focus { box-shadow: 0 0 20px rgba(255, 215, 0, 0.2); }
+        input:focus { 
+            border-color: rgba(255, 215, 0, 0.4);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.1);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
         button {
-            padding: 15px 25px;
-            background: linear-gradient(135deg, #ffd700, #ff6b35);
+            padding: 16px 28px;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
             border: none;
-            border-radius: 25px;
-            color: #1a1a2e;
-            font-weight: bold;
+            border-radius: 50px;
+            color: var(--bg-dark);
+            font-weight: 600;
+            font-size: 0.95em;
             cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(255, 215, 0, 0.25);
         }
-        button:hover { transform: scale(1.05); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        button:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px rgba(255, 215, 0, 0.35);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed; 
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Controls */
         .controls {
-            top: 20px;
-            right: 20px;
+            top: 24px;
+            right: 24px;
             display: flex;
             flex-direction: column;
             gap: 8px;
         }
         .controls button {
-            padding: 10px 15px;
-            background: rgba(255, 255, 255, 0.1);
-            color: #e0e0e0;
+            padding: 12px 18px;
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text);
             font-size: 0.85em;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: none;
         }
+        .controls button:hover {
+            background: rgba(255, 255, 255, 0.12);
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2);
+        }
+        .controls button.active {
+            background: linear-gradient(135deg, var(--purple) 0%, var(--purple-dark) 100%);
+            border-color: var(--purple);
+        }
+        
+        /* Avatar selector */
         .avatar-select {
-            top: 20px;
-            left: 20px;
+            top: 24px;
+            left: 24px;
         }
         .avatar-select select {
-            padding: 10px 15px;
-            background: rgba(0, 0, 0, 0.7);
-            color: #e0e0e0;
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            border-radius: 10px;
+            padding: 12px 18px;
+            background: rgba(18, 18, 30, 0.95);
+            color: var(--text);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 12px;
+            font-size: 0.9em;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s ease;
         }
+        .avatar-select select:hover {
+            border-color: rgba(255, 215, 0, 0.4);
+        }
+        
+        /* Status */
         .status {
-            bottom: 180px;
+            bottom: 200px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.6);
-            padding: 8px 20px;
-            border-radius: 20px;
+            background: rgba(18, 18, 30, 0.9);
+            padding: 10px 24px;
+            border-radius: 50px;
             font-size: 0.85em;
-            color: #888;
-        }
-        .loading {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            z-index: 100;
-            background: rgba(0,0,0,0.9);
-            padding: 40px;
-            border-radius: 20px;
-        }
-        .loading .spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid rgba(255, 215, 0, 0.2);
-            border-top-color: #ffd700;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .hidden { display: none !important; }
-        
-        /* API Key modal */
-        .modal {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.9);
+            color: var(--text-dim);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             display: flex;
             align-items: center;
+            gap: 8px;
+        }
+        .status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--gold);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+        .status.speaking .dot {
+            background: var(--purple);
+            animation: speakPulse 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes statusPulse {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        @keyframes speakPulse {
+            0%, 100% { opacity: 0.7; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.4); }
+        }
+        
+        /* Loading */
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             justify-content: center;
+            background: var(--bg-dark);
             z-index: 1000;
+            transition: opacity 0.5s ease;
         }
-        .modal-content {
-            background: #1a1a2e;
-            padding: 30px;
-            border-radius: 20px;
-            max-width: 400px;
-            text-align: center;
-            border: 1px solid rgba(255, 215, 0, 0.3);
+        .loading.fade-out {
+            opacity: 0;
+            pointer-events: none;
         }
-        .modal input {
-            width: 100%;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 10px;
-            border: 1px solid #333;
-            background: #0f0f1a;
-            color: #fff;
+        .loading-ring {
+            width: 80px;
+            height: 80px;
+            border: 3px solid rgba(255, 215, 0, 0.1);
+            border-top-color: var(--gold);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
-        .modal p { color: #888; font-size: 0.9em; margin-top: 10px; }
+        .loading p {
+            margin-top: 24px;
+            color: var(--text-dim);
+            font-size: 0.95em;
+        }
+        .loading .progress {
+            margin-top: 16px;
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .loading .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--gold), var(--purple));
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .hidden { display: none !important; }
+        
+        /* Performance indicator */
+        .fps-counter {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 70px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            color: var(--text-dim);
+            font-family: monospace;
+        }
+        
+        /* Expression buttons */
+        .expression-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .expression-grid button {
+            padding: 8px 12px;
+            font-size: 0.8em;
+        }
     </style>
 </head>
 <body>
     <div id="canvas-container"></div>
     
     <div class="loading" id="loading">
-        <div class="spinner"></div>
-        <p>Loading 3D Avatar...</p>
+        <div class="loading-ring"></div>
+        <p id="loadingText">Initializing 3D Engine...</p>
+        <div class="progress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
     </div>
-
-    <!-- Info banner -->
-    <div class="info-banner" id="infoBanner">
-        Demo uses browser voice. Production version uses ElevenLabs via secure backend.
-        <button onclick="this.parentElement.style.display='none'" style="margin-left:15px;padding:5px 10px;">✕</button>
-    </div>
-    <style>
-        .info-banner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: rgba(255, 215, 0, 0.15);
-            color: #ffd700;
-            padding: 10px 20px;
-            text-align: center;
-            font-size: 0.85em;
-            z-index: 100;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.3);
-        }
-    </style>
 
     <div class="ui-overlay header">
-        <h1>🦁 Leonida</h1>
+        <h1>✨ LEONIDA</h1>
+        <div class="subtitle">AI Assistant</div>
     </div>
 
     <div class="ui-overlay avatar-select">
-        <select id="avatar-selector" onchange="changeAvatar(this.value)">
-            <option value="rose">Rose</option>
-            <option value="devil">Devil</option>
-            <option value="polydancer">Polydancer</option>
-            <option value="robert">Robert</option>
+        <select id="avatar-selector">
+            <option value="devil">🔥 Devil</option>
+            <option value="nightmare">👻 Nightmare</option>
+            <option value="bullidan">🐂 Bullidan</option>
+            <option value="skull">💀 Skull</option>
+            <option value="observer">👁️ Observer</option>
+            <option value="amazonas">🌿 Amazonas</option>
+            <option value="polydancer" selected>💃 Polydancer</option>
+            <option value="rose">🌹 Rose</option>
         </select>
     </div>
 
     <div class="ui-overlay controls">
-        <button onclick="setMood('neutral')">😐 Neutral</button>
-        <button onclick="setMood('happy')">😊 Happy</button>
-        <button onclick="setMood('angry')">😠 Angry</button>
-        <button onclick="testSpeak()">🔊 Test Voice</button>
+        <button onclick="setMood('neutral')" id="mood-neutral" class="active">😐 Neutral</button>
+        <button onclick="setMood('happy')" id="mood-happy">😊 Happy</button>
+        <button onclick="setMood('angry')" id="mood-angry">😠 Fierce</button>
+        <button onclick="setMood('surprised')" id="mood-surprised">😲 Surprised</button>
+        <button onclick="toggleParticles()" id="particles-btn">✨ Particles</button>
+        <button onclick="testSpeak()">🔊 Demo Voice</button>
     </div>
 
-    <div class="ui-overlay status" id="status">Initializing...</div>
+    <div class="ui-overlay status" id="status">
+        <span class="dot"></span>
+        <span id="statusText">Initializing...</span>
+    </div>
 
     <div class="ui-overlay chat-panel">
         <div class="messages" id="messages"></div>
         <div class="input-row">
-            <input type="text" id="input" placeholder="Type a message..." />
+            <input type="text" id="input" placeholder="Say something to Leonida..." />
             <button onclick="sendMessage()" id="sendBtn">Send</button>
         </div>
     </div>
+
+    <div class="fps-counter" id="fpsCounter">-- FPS</div>
 
     <script type="importmap">
     {
@@ -253,91 +431,406 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
-        // Config
+        // ========================================
+        // CONFIGURATION - High Quality VRM Models
+        // ========================================
         const AVATARS = {
             devil: 'https://arweave.net/gfVzs1oH_aPaHVxpQK86HT_rqzyrFPOUKUrDJ30yprs',
+            nightmare: 'https://arweave.net/aFMgc8_TJx3PxDiqE_5dS6lwqQusm1260WpmSwK3FCc',
+            bullidan: 'https://arweave.net/uMDSdp_ENC77sR802M7hTFtigxLs0dRuzmkKlLEAa9U',
+            skull: 'https://arweave.net/oiwKG3vW0dVdUNWaidyQS8ZOxN3V_Qrz8__FW-SBwLc',
+            observer: 'https://arweave.net/bDb0wMAxPHGbhirVjHi-7GF1QL6HrwD8SuKFEF5Sx2M',
+            amazonas: 'https://arweave.net/fqZDwToo41u1a7VnHhZX1BTK5lktXpK_H6H20MVbPqQ',
             polydancer: 'https://arweave.net/jPOg-G0MPH55ZQmamFhT9f8cHn-hjeAQ0mRO5gWeKMQ',
-            rose: 'https://arweave.net/Ea1KXujzJatQgCFSMzGOzp_UtHqB1pyia--U3AtkMAY',
-            robert: 'https://arweave.net/gwG7w4bY-A5c3R6A6GOz3xBCgbPvkFQmqPIDtvnNsYI'
+            rose: 'https://arweave.net/Ea1KXujzJatQgCFSMzGOzp_UtHqB1pyia--U3AtkMAY'
         };
-        
-        // Note: Production uses ElevenLabs via secure Clawdbot backend
-        // Demo uses browser TTS for security
 
-        // State
-        let scene, camera, renderer, controls;
+        // ========================================
+        // STATE
+        // ========================================
+        let scene, camera, renderer, controls, composer;
         let currentVrm = null;
         let clock = new THREE.Clock();
-        let audioContext, analyser;
         let isSpeaking = false;
         let currentMood = 'neutral';
+        let particlesEnabled = true;
         
-        // Animation state
-        let blinkTimer = 0;
-        let breathPhase = 0;
-        let lookTarget = new THREE.Vector3(0, 1.3, 1);
-        let currentLookTarget = new THREE.Vector3(0, 1.3, 1);
-        let nextLookChange = 0;
-        let idlePhase = 0;
-        let speakingIntensity = 0;
+        // Animation state - Genshin-style fluid motion
+        let animState = {
+            breathPhase: 0,
+            swayPhase: 0,
+            bouncePhase: 0,
+            blinkTimer: 0,
+            nextBlink: 2,
+            lookTarget: new THREE.Vector3(0, 1.3, 2),
+            currentLook: new THREE.Vector3(0, 1.3, 2),
+            nextLookChange: 0,
+            speakIntensity: 0,
+            moodBlend: { current: 'neutral', target: 'neutral', progress: 1 },
+            // Secondary motion (follow-through, overlap)
+            armMomentum: { left: 0, right: 0 },
+            headMomentum: { x: 0, y: 0 },
+            hairPhysics: 0
+        };
 
-        // DOM
+        // Particle systems
+        let particleSystems = {
+            aura: null,
+            sparkles: null,
+            ambient: null
+        };
+
+        // FPS tracking
+        let frameCount = 0;
+        let lastFpsUpdate = 0;
+
+        // DOM elements
         const container = document.getElementById('canvas-container');
         const loading = document.getElementById('loading');
-        const status = document.getElementById('status');
+        const loadingText = document.getElementById('loadingText');
+        const progressBar = document.getElementById('progressBar');
+        const statusEl = document.getElementById('status');
+        const statusText = document.getElementById('statusText');
         const messages = document.getElementById('messages');
         const input = document.getElementById('input');
+        const fpsCounter = document.getElementById('fpsCounter');
 
-        // Init scene
+        // ========================================
+        // SCENE SETUP
+        // ========================================
         function initScene() {
+            // Scene
             scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0a0a12, 0.08);
             
-            camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 1.0, 3.5); // Zoomed out, show more body
+            // Camera - cinematic framing
+            camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.2, 3.2);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            // Renderer with high quality settings
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true, 
+                alpha: true,
+                powerPreference: 'high-performance'
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.2;
+            renderer.toneMappingExposure = 1.3;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             container.appendChild(renderer.domElement);
 
+            // Controls
             controls = new OrbitControls(camera, renderer.domElement);
-            controls.target.set(0, 1.0, 0); // Look at chest area
+            controls.target.set(0, 1.1, 0);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
             controls.minDistance = 1.5;
             controls.maxDistance = 5;
-            controls.maxPolarAngle = Math.PI * 0.7;
+            controls.maxPolarAngle = Math.PI * 0.75;
+            controls.minPolarAngle = Math.PI * 0.25;
+            controls.rotateSpeed = 0.5;
             controls.update();
 
-            // Anime-style lighting
-            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            // Post-processing (bloom for magical glow)
+            composer = new EffectComposer(renderer);
+            composer.addPass(new RenderPass(scene, camera));
             
-            const keyLight = new THREE.DirectionalLight(0xffffff, 2);
-            keyLight.position.set(2, 3, 4);
-            scene.add(keyLight);
-            
-            const fillLight = new THREE.DirectionalLight(0x8888ff, 0.8);
-            fillLight.position.set(-2, 2, 2);
-            scene.add(fillLight);
-            
-            const rimLight = new THREE.DirectionalLight(0xffd700, 0.6);
-            rimLight.position.set(0, 2, -3);
-            scene.add(rimLight);
+            const bloomPass = new UnrealBloomPass(
+                new THREE.Vector2(window.innerWidth, window.innerHeight),
+                0.4,  // strength
+                0.5,  // radius
+                0.7   // threshold
+            );
+            composer.addPass(bloomPass);
 
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
+            // Lighting - Anime/Genshin style
+            setupLighting();
+            
+            // Particle systems
+            setupParticles();
+
+            // Resize handler
+            window.addEventListener('resize', onResize);
         }
 
-        // Load VRM
+        function setupLighting() {
+            // Ambient - soft fill
+            const ambient = new THREE.AmbientLight(0x8888ff, 0.4);
+            scene.add(ambient);
+
+            // Key light - warm, from above-right (like sunlight)
+            const keyLight = new THREE.DirectionalLight(0xfff5e6, 2.2);
+            keyLight.position.set(3, 4, 4);
+            keyLight.castShadow = true;
+            keyLight.shadow.mapSize.width = 2048;
+            keyLight.shadow.mapSize.height = 2048;
+            keyLight.shadow.camera.near = 0.5;
+            keyLight.shadow.camera.far = 20;
+            keyLight.shadow.bias = -0.0001;
+            scene.add(keyLight);
+
+            // Fill light - cool, from left (ambient sky)
+            const fillLight = new THREE.DirectionalLight(0x88aaff, 0.8);
+            fillLight.position.set(-3, 2, 2);
+            scene.add(fillLight);
+
+            // Rim light - golden accent from behind
+            const rimLight = new THREE.DirectionalLight(0xffd700, 0.7);
+            rimLight.position.set(0, 2, -4);
+            scene.add(rimLight);
+
+            // Bottom fill - subtle ground bounce
+            const bottomFill = new THREE.DirectionalLight(0x6644aa, 0.3);
+            bottomFill.position.set(0, -2, 2);
+            scene.add(bottomFill);
+
+            // Point light for face emphasis
+            const faceLight = new THREE.PointLight(0xffffff, 0.5, 3);
+            faceLight.position.set(0, 1.5, 1.5);
+            scene.add(faceLight);
+        }
+
+        // ========================================
+        // PARTICLE SYSTEMS - Genshin style effects
+        // ========================================
+        function setupParticles() {
+            // Aura particles - floating around character
+            const auraGeometry = new THREE.BufferGeometry();
+            const auraCount = 100;
+            const auraPositions = new Float32Array(auraCount * 3);
+            const auraSizes = new Float32Array(auraCount);
+            const auraAlphas = new Float32Array(auraCount);
+            
+            for (let i = 0; i < auraCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 0.5 + Math.random() * 0.8;
+                const height = Math.random() * 2;
+                
+                auraPositions[i * 3] = Math.cos(angle) * radius;
+                auraPositions[i * 3 + 1] = height;
+                auraPositions[i * 3 + 2] = Math.sin(angle) * radius;
+                auraSizes[i] = 0.02 + Math.random() * 0.04;
+                auraAlphas[i] = Math.random();
+            }
+            
+            auraGeometry.setAttribute('position', new THREE.BufferAttribute(auraPositions, 3));
+            auraGeometry.setAttribute('size', new THREE.BufferAttribute(auraSizes, 1));
+            auraGeometry.setAttribute('alpha', new THREE.BufferAttribute(auraAlphas, 1));
+            
+            const auraMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    color1: { value: new THREE.Color(0xffd700) },
+                    color2: { value: new THREE.Color(0x8b5cf6) }
+                },
+                vertexShader: `
+                    attribute float size;
+                    attribute float alpha;
+                    varying float vAlpha;
+                    uniform float time;
+                    
+                    void main() {
+                        vAlpha = alpha;
+                        vec3 pos = position;
+                        
+                        // Spiral upward motion
+                        float t = time * 0.5 + alpha * 6.28;
+                        pos.x += sin(t + pos.y * 2.0) * 0.1;
+                        pos.z += cos(t + pos.y * 2.0) * 0.1;
+                        pos.y = mod(pos.y + time * 0.15, 2.0);
+                        
+                        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                        gl_PointSize = size * 300.0 / -mvPosition.z;
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying float vAlpha;
+                    uniform vec3 color1;
+                    uniform vec3 color2;
+                    uniform float time;
+                    
+                    void main() {
+                        vec2 center = gl_PointCoord - 0.5;
+                        float dist = length(center);
+                        if (dist > 0.5) discard;
+                        
+                        float alpha = smoothstep(0.5, 0.0, dist) * vAlpha * 0.6;
+                        vec3 color = mix(color1, color2, sin(time + vAlpha * 6.28) * 0.5 + 0.5);
+                        gl_FragColor = vec4(color, alpha);
+                    }
+                `,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            particleSystems.aura = new THREE.Points(auraGeometry, auraMaterial);
+            scene.add(particleSystems.aura);
+
+            // Sparkle particles - occasional bright flashes
+            const sparkleGeometry = new THREE.BufferGeometry();
+            const sparkleCount = 30;
+            const sparkleData = {
+                positions: new Float32Array(sparkleCount * 3),
+                sizes: new Float32Array(sparkleCount),
+                phases: new Float32Array(sparkleCount),
+                lifetimes: new Float32Array(sparkleCount)
+            };
+            
+            for (let i = 0; i < sparkleCount; i++) {
+                resetSparkle(sparkleData, i);
+            }
+            
+            sparkleGeometry.setAttribute('position', new THREE.BufferAttribute(sparkleData.positions, 3));
+            sparkleGeometry.setAttribute('size', new THREE.BufferAttribute(sparkleData.sizes, 1));
+            sparkleGeometry.setAttribute('phase', new THREE.BufferAttribute(sparkleData.phases, 1));
+            sparkleGeometry.setAttribute('lifetime', new THREE.BufferAttribute(sparkleData.lifetimes, 1));
+            
+            const sparkleMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 }
+                },
+                vertexShader: `
+                    attribute float size;
+                    attribute float phase;
+                    attribute float lifetime;
+                    varying float vBrightness;
+                    uniform float time;
+                    
+                    void main() {
+                        float age = mod(time + phase, lifetime);
+                        float life = age / lifetime;
+                        vBrightness = sin(life * 3.14159) * (1.0 - life * 0.5);
+                        
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = size * vBrightness * 400.0 / -mvPosition.z;
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying float vBrightness;
+                    
+                    void main() {
+                        vec2 center = gl_PointCoord - 0.5;
+                        float dist = length(center);
+                        if (dist > 0.5) discard;
+                        
+                        // Star shape
+                        float star = 1.0 - smoothstep(0.0, 0.5, dist);
+                        float rays = max(
+                            abs(center.x) < 0.08 ? 1.0 : 0.0,
+                            abs(center.y) < 0.08 ? 1.0 : 0.0
+                        );
+                        float alpha = max(star, rays * 0.5) * vBrightness;
+                        
+                        gl_FragColor = vec4(1.0, 0.95, 0.8, alpha);
+                    }
+                `,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            particleSystems.sparkles = new THREE.Points(sparkleGeometry, sparkleMaterial);
+            particleSystems.sparkles.userData = sparkleData;
+            scene.add(particleSystems.sparkles);
+
+            // Ambient dust particles
+            const dustGeometry = new THREE.BufferGeometry();
+            const dustCount = 200;
+            const dustPositions = new Float32Array(dustCount * 3);
+            
+            for (let i = 0; i < dustCount; i++) {
+                dustPositions[i * 3] = (Math.random() - 0.5) * 8;
+                dustPositions[i * 3 + 1] = Math.random() * 4;
+                dustPositions[i * 3 + 2] = (Math.random() - 0.5) * 8;
+            }
+            
+            dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+            
+            const dustMaterial = new THREE.PointsMaterial({
+                size: 0.015,
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.3,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            particleSystems.ambient = new THREE.Points(dustGeometry, dustMaterial);
+            scene.add(particleSystems.ambient);
+        }
+
+        function resetSparkle(data, i) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 0.3 + Math.random() * 1.0;
+            const height = 0.5 + Math.random() * 1.5;
+            
+            data.positions[i * 3] = Math.cos(angle) * radius;
+            data.positions[i * 3 + 1] = height;
+            data.positions[i * 3 + 2] = Math.sin(angle) * radius;
+            data.sizes[i] = 0.03 + Math.random() * 0.05;
+            data.phases[i] = Math.random() * 5;
+            data.lifetimes[i] = 2 + Math.random() * 3;
+        }
+
+        function updateParticles(time, delta) {
+            if (!particlesEnabled) {
+                if (particleSystems.aura) particleSystems.aura.visible = false;
+                if (particleSystems.sparkles) particleSystems.sparkles.visible = false;
+                return;
+            }
+            
+            if (particleSystems.aura) {
+                particleSystems.aura.visible = true;
+                particleSystems.aura.material.uniforms.time.value = time;
+            }
+            
+            if (particleSystems.sparkles) {
+                particleSystems.sparkles.visible = true;
+                particleSystems.sparkles.material.uniforms.time.value = time;
+                
+                // Occasionally reset sparkles to new positions
+                const data = particleSystems.sparkles.userData;
+                for (let i = 0; i < 30; i++) {
+                    const age = (time + data.phases[i]) % data.lifetimes[i];
+                    if (age < delta) {
+                        resetSparkle(data, i);
+                        particleSystems.sparkles.geometry.attributes.position.needsUpdate = true;
+                    }
+                }
+            }
+            
+            if (particleSystems.ambient) {
+                // Slow drift
+                const positions = particleSystems.ambient.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i] += Math.sin(time * 0.1 + i) * 0.0005;
+                    positions[i + 1] += 0.001;
+                    positions[i + 2] += Math.cos(time * 0.1 + i) * 0.0005;
+                    
+                    if (positions[i + 1] > 4) positions[i + 1] = 0;
+                }
+                particleSystems.ambient.geometry.attributes.position.needsUpdate = true;
+            }
+        }
+
+        // ========================================
+        // VRM LOADING
+        // ========================================
         async function loadAvatar(url) {
-            loading.classList.remove('hidden');
-            status.textContent = 'Loading avatar...';
+            loading.classList.remove('hidden', 'fade-out');
+            loadingText.textContent = 'Loading 3D model...';
+            progressBar.style.width = '10%';
+            setStatus('Loading...');
 
             if (currentVrm) {
                 scene.remove(currentVrm.scene);
@@ -349,71 +842,144 @@
             loader.register((parser) => new VRMLoaderPlugin(parser));
 
             try {
-                const gltf = await loader.loadAsync(url);
+                progressBar.style.width = '30%';
+                loadingText.textContent = 'Downloading avatar...';
+                
+                const gltf = await loader.loadAsync(url, (progress) => {
+                    if (progress.total) {
+                        const pct = 30 + (progress.loaded / progress.total) * 50;
+                        progressBar.style.width = pct + '%';
+                    }
+                });
+                
+                progressBar.style.width = '85%';
+                loadingText.textContent = 'Processing VRM...';
+                
                 currentVrm = gltf.userData.vrm;
                 
                 VRMUtils.removeUnnecessaryVertices(gltf.scene);
                 VRMUtils.rotateVRM0(currentVrm);
                 
+                // Enable shadows
+                currentVrm.scene.traverse((obj) => {
+                    if (obj.isMesh) {
+                        obj.castShadow = true;
+                        obj.receiveShadow = true;
+                    }
+                });
+                
                 scene.add(currentVrm.scene);
                 
-                // Setup initial pose (NOT T-pose)
-                setupNaturalPose();
-
-                status.textContent = 'Ready ✓';
-                loading.classList.add('hidden');
+                // Reset animation state
+                animState.breathPhase = 0;
+                animState.swayPhase = 0;
+                
+                progressBar.style.width = '100%';
+                loadingText.textContent = 'Ready!';
+                
+                setTimeout(() => {
+                    loading.classList.add('fade-out');
+                    setTimeout(() => loading.classList.add('hidden'), 500);
+                }, 300);
+                
+                setStatus('Ready');
                 
             } catch (error) {
                 console.error('Failed to load VRM:', error);
-                status.textContent = 'Error loading avatar';
-                loading.classList.add('hidden');
+                loadingText.textContent = 'Error loading avatar';
+                setStatus('Error');
             }
         }
 
-        // Genshin-style natural pose
-        function setupNaturalPose() {
-            // Pose is set dynamically in animation loop
+        // ========================================
+        // GENSHIN-STYLE ANIMATION SYSTEM
+        // ========================================
+        // Key principles:
+        // 1. Always moving - never static
+        // 2. Weight and momentum - movements follow through
+        // 3. Overlapping action - parts move at different speeds
+        // 4. Ease in/out - no linear motion
+        // 5. Secondary motion - hair, clothes react to primary motion
+        
+        function easeInOutSine(t) {
+            return -(Math.cos(Math.PI * t) - 1) / 2;
+        }
+        
+        function easeOutBack(t) {
+            const c1 = 1.70158;
+            const c3 = c1 + 1;
+            return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
         }
 
-        // Genshin Impact style idle animation - fluid, weighted, personality
-        function updateIdleAnimation(time, delta) {
+        function updateAnimation(time, delta) {
             if (!currentVrm?.humanoid) return;
             
             const h = currentVrm.humanoid;
-            const t = time; // shorthand
             
-            // === CORE BODY MOTION (weight shifting, breathing) ===
-            const breathCycle = Math.sin(t * 1.5) * 0.5 + 0.5; // 0-1
-            const swayCycle = Math.sin(t * 0.4); // Slow body sway
-            const bounceCycle = Math.sin(t * 2.0) * 0.3; // Subtle bounce
+            // === BASE RHYTHMS (layered sine waves for organic motion) ===
+            animState.breathPhase = time * 1.2;  // Slow breathing
+            animState.swayPhase = time * 0.35;   // Very slow weight shift
+            animState.bouncePhase = time * 1.8;  // Subtle bounce
             
-            // Hips - weight shifting side to side
+            const breathVal = Math.sin(animState.breathPhase);
+            const breath01 = breathVal * 0.5 + 0.5;
+            const swayVal = Math.sin(animState.swayPhase);
+            const bounceVal = Math.sin(animState.bouncePhase);
+            
+            // === HIPS - Center of mass, weight shifting ===
             const hips = h.getNormalizedBoneNode('hips');
             if (hips) {
-                hips.rotation.y = swayCycle * 0.04;
-                hips.rotation.z = Math.sin(t * 0.35) * 0.02; // Slight tilt
-                hips.position.y = (breathCycle * 0.008) + (bounceCycle * 0.003);
+                // Weight shift side to side (Genshin characters do this constantly)
+                const hipSway = swayVal * 0.045;
+                const hipTilt = Math.sin(time * 0.4 + 0.3) * 0.025;
+                
+                hips.rotation.y = hipSway;
+                hips.rotation.z = hipTilt;
+                hips.rotation.x = 0.02; // Slight forward lean
+                
+                // Vertical motion - breathing + subtle bounce
+                hips.position.y = breath01 * 0.012 + Math.abs(bounceVal) * 0.004;
+                
+                // Track momentum for follow-through
+                animState.armMomentum.left = hipSway * 0.3;
+                animState.armMomentum.right = hipSway * 0.3;
             }
             
-            // Spine chain - S-curve motion like Genshin
+            // === SPINE CHAIN - S-curve counter-motion ===
             const spine = h.getNormalizedBoneNode('spine');
             const chest = h.getNormalizedBoneNode('chest');
             const upperChest = h.getNormalizedBoneNode('upperChest');
             
             if (spine) {
-                spine.rotation.x = 0.03 + breathCycle * 0.02;
-                spine.rotation.y = swayCycle * -0.03; // Counter-rotate to hips
-                spine.rotation.z = Math.sin(t * 0.4 + 0.5) * 0.015;
+                // Counter-rotate against hips (creates S-curve)
+                spine.rotation.y = -swayVal * 0.035;
+                spine.rotation.x = 0.04 + breath01 * 0.025;
+                spine.rotation.z = Math.sin(time * 0.45 + 0.5) * 0.018;
             }
             if (chest) {
-                chest.rotation.x = breathCycle * 0.025;
-                chest.rotation.y = swayCycle * -0.02;
+                // Further counter-rotation + breathing expansion
+                chest.rotation.y = -swayVal * 0.02;
+                chest.rotation.x = breath01 * 0.03;
+                chest.rotation.z = Math.sin(time * 0.5 + 1.0) * 0.012;
             }
             if (upperChest) {
-                upperChest.rotation.x = breathCycle * 0.015;
+                chest.rotation.x = breath01 * 0.02;
             }
             
-            // === ARMS - Relaxed, swaying naturally ===
+            // === SHOULDERS - Respond to body motion ===
+            const leftShoulder = h.getNormalizedBoneNode('leftShoulder');
+            const rightShoulder = h.getNormalizedBoneNode('rightShoulder');
+            
+            if (leftShoulder) {
+                leftShoulder.rotation.z = 0.05 + Math.sin(time * 0.6) * 0.03;
+                leftShoulder.rotation.y = -0.05;
+            }
+            if (rightShoulder) {
+                rightShoulder.rotation.z = -0.05 + Math.sin(time * 0.6 + 0.3) * -0.03;
+                rightShoulder.rotation.y = 0.05;
+            }
+            
+            // === ARMS - Natural hang with follow-through ===
             const leftUpperArm = h.getNormalizedBoneNode('leftUpperArm');
             const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
             const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
@@ -421,179 +987,246 @@
             const leftHand = h.getNormalizedBoneNode('leftHand');
             const rightHand = h.getNormalizedBoneNode('rightHand');
             
-            // Arms hang naturally with gentle swing
+            // Arms swing opposite to hips (natural walking motion even when standing)
+            const armSwingL = Math.sin(time * 0.55) * 0.08;
+            const armSwingR = Math.sin(time * 0.55 + 0.4) * 0.08;
+            
             if (leftUpperArm) {
-                leftUpperArm.rotation.z = 0.95 + Math.sin(t * 0.6) * 0.08;
-                leftUpperArm.rotation.x = 0.15 + Math.sin(t * 0.45) * 0.06;
-                leftUpperArm.rotation.y = Math.sin(t * 0.5) * 0.04;
+                leftUpperArm.rotation.z = 0.85 + armSwingL;
+                leftUpperArm.rotation.x = 0.12 + Math.sin(time * 0.4) * 0.05;
+                leftUpperArm.rotation.y = Math.sin(time * 0.45) * 0.04;
             }
             if (rightUpperArm) {
-                rightUpperArm.rotation.z = -0.95 + Math.sin(t * 0.6 + 0.3) * 0.08;
-                rightUpperArm.rotation.x = 0.15 + Math.sin(t * 0.5) * 0.06;
-                rightUpperArm.rotation.y = Math.sin(t * 0.55 + 0.2) * -0.04;
+                rightUpperArm.rotation.z = -0.85 + armSwingR;
+                rightUpperArm.rotation.x = 0.12 + Math.sin(time * 0.45) * 0.05;
+                rightUpperArm.rotation.y = Math.sin(time * 0.5) * -0.04;
             }
             
-            // Forearms - slight bend, natural hang
+            // Forearms - slight bend, delayed follow-through
             if (leftLowerArm) {
-                leftLowerArm.rotation.y = -0.15 + Math.sin(t * 0.7) * 0.05;
-                leftLowerArm.rotation.z = 0.05;
+                leftLowerArm.rotation.y = -0.2 + Math.sin(time * 0.6 + 0.3) * 0.06;
             }
             if (rightLowerArm) {
-                rightLowerArm.rotation.y = 0.15 + Math.sin(t * 0.65 + 0.2) * 0.05;
-                rightLowerArm.rotation.z = -0.05;
+                rightLowerArm.rotation.y = 0.2 + Math.sin(time * 0.55 + 0.4) * 0.06;
             }
             
-            // Hands - relaxed, slight curl
+            // Hands - relaxed with subtle motion
             if (leftHand) {
-                leftHand.rotation.x = 0.15 + Math.sin(t * 0.8) * 0.05;
-                leftHand.rotation.z = 0.1;
+                leftHand.rotation.x = 0.2 + Math.sin(time * 0.7) * 0.08;
+                leftHand.rotation.z = 0.12;
             }
             if (rightHand) {
-                rightHand.rotation.x = 0.15 + Math.sin(t * 0.75) * 0.05;
-                rightHand.rotation.z = -0.1;
+                rightHand.rotation.x = 0.2 + Math.sin(time * 0.65) * 0.08;
+                rightHand.rotation.z = -0.12;
             }
             
-            // === HEAD & NECK - Looking around with personality ===
-            const head = h.getNormalizedBoneNode('head');
+            // === NECK & HEAD - Personality and attention ===
+            updateLookAt(time, delta);
+            
             const neck = h.getNormalizedBoneNode('neck');
+            const head = h.getNormalizedBoneNode('head');
             
-            // Change look target occasionally
-            if (time > nextLookChange) {
-                lookTarget.set(
-                    (Math.random() - 0.5) * 0.8,
-                    1.0 + (Math.random() - 0.5) * 0.3,
-                    2 + Math.random()
-                );
-                nextLookChange = time + 3 + Math.random() * 5;
-            }
-            currentLookTarget.lerp(lookTarget, delta * 1.5);
+            // Smooth look target
+            animState.currentLook.lerp(animState.lookTarget, delta * 2.0);
+            
+            const lookX = (animState.currentLook.x - 0) * 0.15;
+            const lookY = (animState.currentLook.y - 1.3) * 0.1;
             
             if (neck) {
-                neck.rotation.y = swayCycle * 0.03 + (currentLookTarget.x * 0.15);
-                neck.rotation.x = -0.05 + breathCycle * 0.02;
+                // Neck leads head rotation, with some body sway influence
+                neck.rotation.y = lookX * 0.6 + swayVal * 0.025;
+                neck.rotation.x = -0.08 + breath01 * 0.02 + lookY * 0.3;
+                neck.rotation.z = Math.sin(time * 0.4) * 0.02;
             }
             if (head) {
-                head.rotation.y = Math.sin(t * 0.3) * 0.04 + (currentLookTarget.x * 0.2);
-                head.rotation.x = Math.sin(t * 0.25) * 0.03 - 0.03;
-                head.rotation.z = Math.sin(t * 0.35) * 0.02; // Slight head tilt
+                // Head follows neck with slight delay and overshoot
+                head.rotation.y = lookX + Math.sin(time * 0.35) * 0.04;
+                head.rotation.x = lookY + Math.sin(time * 0.3) * 0.03 - 0.02;
+                head.rotation.z = Math.sin(time * 0.45) * 0.03; // Curious tilt
+                
+                // Store momentum for hair physics
+                animState.headMomentum.x = head.rotation.x;
+                animState.headMomentum.y = head.rotation.y;
             }
             
-            // === SHOULDERS - Follow body motion ===
-            const leftShoulder = h.getNormalizedBoneNode('leftShoulder');
-            const rightShoulder = h.getNormalizedBoneNode('rightShoulder');
-            
-            if (leftShoulder) {
-                leftShoulder.rotation.z = Math.sin(t * 0.5) * 0.02;
-            }
-            if (rightShoulder) {
-                rightShoulder.rotation.z = Math.sin(t * 0.5 + 0.3) * -0.02;
+            // === FACE ANIMATIONS ===
+            updateBlink(time, delta);
+            updateLipSync(delta);
+            updateMood(delta);
+        }
+
+        function updateLookAt(time, delta) {
+            // Genshin characters look around with purpose and personality
+            if (time > animState.nextLookChange) {
+                // Decide where to look
+                const rand = Math.random();
+                if (rand < 0.4) {
+                    // Look at camera (engaging)
+                    animState.lookTarget.set(0, 1.3, 3);
+                } else if (rand < 0.7) {
+                    // Look slightly off to side (contemplative)
+                    animState.lookTarget.set(
+                        (Math.random() - 0.5) * 1.5,
+                        1.2 + (Math.random() - 0.5) * 0.3,
+                        2 + Math.random()
+                    );
+                } else {
+                    // Glance down or up briefly
+                    animState.lookTarget.set(
+                        (Math.random() - 0.5) * 0.5,
+                        1.0 + Math.random() * 0.6,
+                        2
+                    );
+                }
+                
+                // Vary timing for natural feel
+                animState.nextLookChange = time + 2 + Math.random() * 4;
             }
         }
 
-        // Blinking
-        function updateBlink(delta) {
+        function updateBlink(time, delta) {
             if (!currentVrm?.expressionManager) return;
             
-            blinkTimer += delta;
+            animState.blinkTimer += delta;
             
-            // Random blink every 2-6 seconds
-            if (blinkTimer > 2 + Math.random() * 4) {
+            if (animState.blinkTimer > animState.nextBlink) {
                 const em = currentVrm.expressionManager;
                 
-                // Quick blink animation
-                const blinkDuration = 0.12;
-                const startTime = performance.now();
+                // Blink animation with easing
+                const duration = 0.15;
+                const start = performance.now();
                 
                 const animateBlink = () => {
-                    const elapsed = (performance.now() - startTime) / 1000;
-                    const progress = elapsed / blinkDuration;
+                    const elapsed = (performance.now() - start) / 1000;
+                    const t = Math.min(elapsed / duration, 1);
                     
-                    if (progress < 1) {
-                        const blinkValue = progress < 0.5 
-                            ? progress * 2 
-                            : 2 - progress * 2;
-                        em.setValue('blink', blinkValue);
-                        requestAnimationFrame(animateBlink);
+                    // Ease in-out for natural blink
+                    let val;
+                    if (t < 0.4) {
+                        val = easeInOutSine(t / 0.4);
                     } else {
-                        em.setValue('blink', 0);
+                        val = easeInOutSine(1 - (t - 0.4) / 0.6);
+                    }
+                    
+                    em.setValue('blink', val);
+                    
+                    if (t < 1) {
+                        requestAnimationFrame(animateBlink);
                     }
                 };
                 
                 animateBlink();
-                blinkTimer = 0;
+                
+                // Sometimes double-blink
+                animState.blinkTimer = 0;
+                animState.nextBlink = Math.random() < 0.15 ? 0.15 : (2 + Math.random() * 4);
             }
         }
 
-        // Lip sync from audio
-        function updateLipSync() {
+        function updateLipSync(delta) {
             if (!currentVrm?.expressionManager) return;
             
             const em = currentVrm.expressionManager;
             
-            if (!analyser || !isSpeaking) {
+            if (!isSpeaking) {
                 // Smoothly close mouth
-                speakingIntensity *= 0.85;
-                em.setValue('aa', speakingIntensity * 0.5);
-                em.setValue('oh', speakingIntensity * 0.2);
-                em.setValue('ih', speakingIntensity * 0.1);
-                return;
+                animState.speakIntensity *= 0.88;
             }
-
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            analyser.getByteFrequencyData(dataArray);
-
-            // Analyze frequency bands for different mouth shapes
-            const bass = dataArray.slice(0, 4).reduce((a, b) => a + b, 0) / 4;
-            const mid = dataArray.slice(4, 12).reduce((a, b) => a + b, 0) / 8;
-            const high = dataArray.slice(12, 24).reduce((a, b) => a + b, 0) / 12;
-
-            const avgVolume = (bass + mid + high) / 3 / 255;
             
-            // Smooth the intensity
-            speakingIntensity = speakingIntensity * 0.7 + avgVolume * 0.3;
+            // Viseme values
+            const aa = animState.speakIntensity * 0.7;
+            const oh = animState.speakIntensity * 0.3;
             
-            // Map to visemes (mouth shapes)
-            em.setValue('aa', Math.min(speakingIntensity * 1.2, 1)); // Open mouth
-            em.setValue('oh', (mid / 255) * 0.6); // Round mouth
-            em.setValue('ih', (high / 255) * 0.4); // Smile-ish
+            em.setValue('aa', aa);
+            em.setValue('oh', oh);
         }
 
-        // Mood control
-        window.setMood = function(mood) {
+        function updateMood(delta) {
             if (!currentVrm?.expressionManager) return;
             
-            currentMood = mood;
             const em = currentVrm.expressionManager;
+            const mood = animState.moodBlend;
             
-            // Reset
-            ['happy', 'angry', 'sad', 'relaxed', 'surprised'].forEach(e => em.setValue(e, 0));
-            
-            switch(mood) {
-                case 'happy': em.setValue('happy', 0.8); break;
-                case 'angry': em.setValue('angry', 0.7); break;
-                case 'sad': em.setValue('sad', 0.7); break;
-                default: em.setValue('relaxed', 0.3);
+            // Smooth mood transitions
+            if (mood.current !== mood.target) {
+                mood.progress += delta * 2;
+                if (mood.progress >= 1) {
+                    mood.current = mood.target;
+                    mood.progress = 1;
+                }
             }
             
-            status.textContent = `Mood: ${mood}`;
-        };
+            // Apply mood expressions
+            const moodValues = {
+                neutral: { happy: 0, angry: 0, sad: 0, surprised: 0, relaxed: 0.25 },
+                happy: { happy: 0.85, angry: 0, sad: 0, surprised: 0, relaxed: 0.2 },
+                angry: { happy: 0, angry: 0.75, sad: 0, surprised: 0, relaxed: 0 },
+                sad: { happy: 0, angry: 0, sad: 0.7, surprised: 0, relaxed: 0 },
+                surprised: { happy: 0.2, angry: 0, sad: 0, surprised: 0.8, relaxed: 0 }
+            };
+            
+            const targetVals = moodValues[mood.target] || moodValues.neutral;
+            const currentVals = moodValues[mood.current] || moodValues.neutral;
+            
+            const t = easeInOutSine(mood.progress);
+            
+            for (const [key, targetVal] of Object.entries(targetVals)) {
+                const currentVal = currentVals[key] || 0;
+                const val = currentVal + (targetVal - currentVal) * t;
+                try {
+                    em.setValue(key, val);
+                } catch (e) {
+                    // Expression might not exist on this model
+                }
+            }
+        }
 
-        // Browser TTS (production uses ElevenLabs via Clawdbot backend)
-        async function speakBrowser(text) {
+        // ========================================
+        // SPEAKING & TTS
+        // ========================================
+        function simulateSpeaking() {
+            if (!isSpeaking || !currentVrm?.expressionManager) return;
+            
+            // Simulate natural speech rhythm
+            const intensity = 0.3 + Math.random() * 0.6;
+            animState.speakIntensity = animState.speakIntensity * 0.7 + intensity * 0.3;
+            
+            // Add slight head motion while speaking
+            const head = currentVrm.humanoid?.getNormalizedBoneNode('head');
+            if (head) {
+                head.rotation.x += (Math.random() - 0.5) * 0.02;
+            }
+            
+            setTimeout(simulateSpeaking, 60 + Math.random() * 80);
+        }
+
+        async function speak(text) {
             return new Promise((resolve) => {
-                status.textContent = 'Speaking (browser voice)...';
+                setStatus('Speaking...', true);
+                isSpeaking = true;
+                simulateSpeaking();
                 
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.rate = 0.95;
+                utterance.pitch = 1.05;
                 
-                // Simulate lip sync with timing
-                utterance.onstart = () => {
-                    isSpeaking = true;
-                    simulateLipSync();
-                };
+                // Try to find a good voice
+                const voices = speechSynthesis.getVoices();
+                const preferred = voices.find(v => 
+                    v.name.includes('Samantha') || 
+                    v.name.includes('Google') ||
+                    v.lang.startsWith('en')
+                );
+                if (preferred) utterance.voice = preferred;
+                
                 utterance.onend = () => {
                     isSpeaking = false;
-                    status.textContent = 'Ready';
+                    setStatus('Ready');
+                    resolve();
+                };
+                utterance.onerror = () => {
+                    isSpeaking = false;
+                    setStatus('Ready');
                     resolve();
                 };
 
@@ -601,48 +1234,14 @@
             });
         }
 
-        // Simulate lip sync for browser TTS
-        function simulateLipSync() {
-            if (!isSpeaking || !currentVrm?.expressionManager) return;
-            
-            const em = currentVrm.expressionManager;
-            const value = 0.3 + Math.random() * 0.5;
-            em.setValue('aa', value);
-            em.setValue('oh', Math.random() * 0.3);
-            
-            setTimeout(simulateLipSync, 80 + Math.random() * 80);
+        // ========================================
+        // UI FUNCTIONS
+        // ========================================
+        function setStatus(text, speaking = false) {
+            statusText.textContent = text;
+            statusEl.classList.toggle('speaking', speaking);
         }
 
-        // Speak function (browser TTS for demo)
-        async function speak(text) {
-            await speakBrowser(text);
-        }
-
-        // Test speak
-        window.testSpeak = async function() {
-            const text = "Hello! I'm Leonida, your AI assistant. I now have a 3D anime avatar with natural movement and expressions. What do you think?";
-            addMessage(text, 'bot');
-            await speak(text);
-        };
-
-        // Send message
-        window.sendMessage = async function() {
-            const text = input.value.trim();
-            if (!text) return;
-
-            addMessage(text, 'user');
-            input.value = '';
-            document.getElementById('sendBtn').disabled = true;
-            
-            setTimeout(async () => {
-                const response = "I received your message! In the full integration, I'll connect to Clawdbot for real AI responses.";
-                addMessage(response, 'bot');
-                await speak(response);
-                document.getElementById('sendBtn').disabled = false;
-            }, 500);
-        };
-
-        // Add message
         function addMessage(text, type) {
             const div = document.createElement('div');
             div.className = 'msg ' + type;
@@ -651,38 +1250,146 @@
             messages.scrollTop = messages.scrollHeight;
         }
 
-        // Change avatar
-        window.changeAvatar = function(key) {
-            if (AVATARS[key]) loadAvatar(AVATARS[key]);
+        window.setMood = function(mood) {
+            currentMood = mood;
+            animState.moodBlend.target = mood;
+            animState.moodBlend.progress = 0;
+            
+            // Update button states
+            document.querySelectorAll('.controls button[id^="mood-"]').forEach(btn => {
+                btn.classList.toggle('active', btn.id === 'mood-' + mood);
+            });
+            
+            setStatus(`Mood: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`);
         };
 
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
+        window.toggleParticles = function() {
+            particlesEnabled = !particlesEnabled;
+            document.getElementById('particles-btn').classList.toggle('active', particlesEnabled);
+        };
+
+        window.testSpeak = async function() {
+            const phrases = [
+                "Hello! I'm Leonida, your AI companion. I've been designed with smooth, lifelike animations inspired by games like Genshin Impact.",
+                "Notice how I shift my weight, breathe naturally, and look around? That's all procedural animation running in real-time!",
+                "Try changing my mood or switching between different avatar styles. Each one has the same high-quality animation system.",
+                "The sparkles and aura around me? Those are GPU-accelerated particle effects. Pretty magical, right?"
+            ];
             
-            const delta = clock.getDelta();
-            const time = clock.getElapsedTime();
+            const text = phrases[Math.floor(Math.random() * phrases.length)];
+            addMessage(text, 'bot');
+            
+            // Set happy mood while speaking
+            const oldMood = currentMood;
+            setMood('happy');
+            
+            await speak(text);
+            
+            // Return to neutral after speaking
+            setTimeout(() => setMood(oldMood), 1000);
+        };
 
-            if (currentVrm) {
-                updateIdleAnimation(time, delta);
-                updateBlink(delta);
-                updateLipSync();
-                currentVrm.update(delta);
+        window.sendMessage = async function() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            addMessage(text, 'user');
+            input.value = '';
+            document.getElementById('sendBtn').disabled = true;
+            
+            // Simulate thinking
+            setStatus('Thinking...');
+            
+            // Detect emotion from input
+            const lowerText = text.toLowerCase();
+            if (lowerText.includes('angry') || lowerText.includes('mad') || lowerText.includes('upset')) {
+                setMood('angry');
+            } else if (lowerText.includes('happy') || lowerText.includes('great') || lowerText.includes('awesome') || lowerText.includes('love')) {
+                setMood('happy');
+            } else if (lowerText.includes('sad') || lowerText.includes('sorry') || lowerText.includes('bad')) {
+                setMood('sad');
+            } else if (lowerText.includes('wow') || lowerText.includes('what') || lowerText.includes('really')) {
+                setMood('surprised');
             }
+            
+            setTimeout(async () => {
+                const response = "I hear you! In a full implementation, I'd connect to a real AI backend. For now, I'm showing off my smooth animations and expressions. Try saying something emotional!";
+                addMessage(response, 'bot');
+                await speak(response);
+                document.getElementById('sendBtn').disabled = false;
+            }, 800);
+        };
 
-            controls.update();
-            renderer.render(scene, camera);
-        }
+        // Avatar selector
+        document.getElementById('avatar-selector').addEventListener('change', (e) => {
+            if (AVATARS[e.target.value]) {
+                loadAvatar(AVATARS[e.target.value]);
+            }
+        });
 
         // Enter key
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
 
-        // Init
+        // ========================================
+        // RESIZE HANDLER
+        // ========================================
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ========================================
+        // MAIN LOOP
+        // ========================================
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = Math.min(clock.getDelta(), 0.1); // Cap delta for stability
+            const time = clock.getElapsedTime();
+
+            // Update animations
+            if (currentVrm) {
+                updateAnimation(time, delta);
+                currentVrm.update(delta);
+            }
+
+            // Update particles
+            updateParticles(time, delta);
+
+            // Update controls
+            controls.update();
+
+            // Render with post-processing
+            composer.render();
+
+            // FPS counter
+            frameCount++;
+            if (time - lastFpsUpdate > 0.5) {
+                const fps = Math.round(frameCount / (time - lastFpsUpdate));
+                fpsCounter.textContent = `${fps} FPS`;
+                frameCount = 0;
+                lastFpsUpdate = time;
+            }
+        }
+
+        // ========================================
+        // INIT
+        // ========================================
         initScene();
-        loadAvatar(AVATARS.rose);
+        loadAvatar(AVATARS.polydancer);
         animate();
+        
+        // Load voices
+        speechSynthesis.getVoices();
+        
+        // Welcome message
+        setTimeout(() => {
+            addMessage('Welcome! I\'m Leonida, rendered with Genshin-style animations. Click "Demo Voice" to hear me speak, or try different moods!', 'system');
+        }, 2000);
     </script>
 </body>
 </html>

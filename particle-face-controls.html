@@ -483,7 +483,50 @@
                     depthChance = depthChance * depthChance * depthChance; // Cube for dramatic falloff
                 }
                 
-                if (showParticle && Math.random() < depthChance) {
+                // Feature-based density: denser near eyes, nose, mouth, eyebrows
+                const faceY = y / 1.3;
+                const faceX = x / 1.0;
+                const eyeSpreadF = faceType === 'lion' ? 0.4 : 0.35;
+                
+                // Distance to left/right eyes
+                const leftEyeDist = Math.sqrt((faceX + eyeSpreadF) ** 2 + (faceY - 0.15) ** 2);
+                const rightEyeDist = Math.sqrt((faceX - eyeSpreadF) ** 2 + (faceY - 0.15) ** 2);
+                const eyeDist = Math.min(leftEyeDist, rightEyeDist);
+                
+                // Distance to nose (bridge and tip)
+                const noseBridgeDist = Math.sqrt(faceX ** 2 + (faceY - 0.05) ** 2);
+                const noseTipDist = Math.sqrt(faceX ** 2 + (faceY + 0.15) ** 2);
+                const noseDist = Math.min(noseBridgeDist, noseTipDist);
+                
+                // Distance to mouth
+                const mouthDist = Math.sqrt((faceX / 1.5) ** 2 + (faceY + 0.38) ** 2);
+                
+                // Distance to eyebrows
+                const leftBrowDist = Math.sqrt((faceX + eyeSpreadF) ** 2 + (faceY - 0.32) ** 2);
+                const rightBrowDist = Math.sqrt((faceX - eyeSpreadF) ** 2 + (faceY - 0.32) ** 2);
+                const browDist = Math.min(leftBrowDist, rightBrowDist);
+                
+                // Distance to jaw/chin line
+                const jawDist = Math.abs(faceY + 0.7) + Math.abs(faceX) * 0.3;
+                
+                // Find closest feature
+                const minFeatureDist = Math.min(eyeDist, noseDist * 1.2, mouthDist, browDist * 1.3, jawDist * 0.5);
+                
+                // Feature density: closer to feature = higher chance
+                // 0.15 = very close to feature, 0.5 = far from features
+                let featureChance = 1.0;
+                if (config.depthDensity && z > 0) { // Only apply to front face
+                    if (minFeatureDist < 0.3) {
+                        featureChance = 1.0; // Keep all particles near features
+                    } else {
+                        // Falloff for particles away from features
+                        featureChance = Math.max(0.15, 1.0 - (minFeatureDist - 0.3) * 1.5);
+                    }
+                }
+                
+                const finalChance = depthChance * featureChance;
+                
+                if (showParticle && Math.random() < finalChance) {
                     // Sculpt face features
                     const faceY = y / 1.3;
                     const faceX = x / 1.0;
@@ -561,22 +604,124 @@
                     sizes.push(0.03 * config.particleSize);
                     types.push(1);
                 }
+                
+                // Eyebrow above each eye
+                for (let i = 0; i < Math.round(120 * config.density); i++) {
+                    const t = (i / 120) - 0.5; // -0.5 to 0.5
+                    const browX = eye.x + t * 0.25;
+                    const browY = eye.y + 0.18 + Math.abs(t) * 0.08; // Arch shape
+                    const browZ = eye.z - 0.05 + Math.random() * 0.03;
+                    
+                    // Add some thickness/scatter
+                    const scatter = (Math.random() - 0.5) * 0.03;
+                    
+                    points.push(browX + scatter, browY + scatter * 0.5, browZ);
+                    originalPos.push(browX + scatter, browY + scatter * 0.5, browZ);
+                    colors.push(config.colorPrimary.r * 0.8, config.colorPrimary.g * 0.8, config.colorPrimary.b * 0.8);
+                    sizes.push((0.015 + Math.random() * 0.01) * config.particleSize);
+                    types.push(0);
+                }
             });
             
-            // Mouth
+            // Nose ridge - extra particles along the nose
+            for (let i = 0; i < Math.round(100 * config.density); i++) {
+                const t = i / 100;
+                const noseX = (Math.random() - 0.5) * 0.08;
+                const noseY = 0.1 - t * 0.35; // From bridge to tip
+                const noseZ = 0.75 + Math.sin(t * Math.PI) * 0.15; // Curve outward
+                
+                points.push(noseX, noseY, noseZ);
+                originalPos.push(noseX, noseY, noseZ);
+                colors.push(config.colorPrimary.r, config.colorPrimary.g, config.colorPrimary.b);
+                sizes.push((0.015 + Math.random() * 0.01) * config.particleSize);
+                types.push(0);
+            }
+            
+            // Nostrils
+            const nostrilPositions = [{ x: -0.06, y: -0.2 }, { x: 0.06, y: -0.2 }];
+            nostrilPositions.forEach(nostril => {
+                for (let i = 0; i < Math.round(40 * config.density); i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const r = Math.random() * 0.04;
+                    const x = nostril.x + Math.cos(angle) * r;
+                    const y = nostril.y + Math.sin(angle) * r * 0.5;
+                    const z = 0.78 + Math.random() * 0.02;
+                    
+                    points.push(x, y, z);
+                    originalPos.push(x, y, z);
+                    colors.push(config.colorPrimary.r * 0.6, config.colorPrimary.g * 0.6, config.colorPrimary.b * 0.6);
+                    sizes.push((0.012 + Math.random() * 0.008) * config.particleSize);
+                    types.push(0);
+                }
+            });
+            
+            // Mouth - upper lip
             const mouthWidth = faceType === 'lion' ? 0.3 : 0.25;
-            for (let i = 0; i < Math.round(80 * config.density); i++) {
-                const t = i / 80;
-                const angle = (t - 0.5) * Math.PI * 0.8;
-                const x = Math.sin(angle) * mouthWidth;
-                const y = -0.45 + Math.cos(angle) * 0.03;
-                const z = 0.75 + Math.cos(angle) * 0.05;
+            for (let i = 0; i < Math.round(100 * config.density); i++) {
+                const t = (i / 100) - 0.5; // -0.5 to 0.5
+                const x = t * mouthWidth * 2;
+                // Cupid's bow shape for upper lip
+                const cupidBow = -Math.abs(t) * 0.08 + (1 - Math.abs(t * 2)) * 0.03;
+                const y = -0.42 + cupidBow;
+                const z = 0.78 + (1 - Math.abs(t * 2)) * 0.03;
                 
                 points.push(x, y, z);
                 originalPos.push(x, y, z);
-                colors.push(0.9, 0.2, 0.5);
-                sizes.push(0.025 * config.particleSize);
+                colors.push(config.colorPrimary.r * 0.9, config.colorPrimary.g * 0.5, config.colorPrimary.b * 0.6);
+                sizes.push((0.018 + Math.random() * 0.01) * config.particleSize);
                 types.push(2);
+            }
+            
+            // Mouth - lower lip (fuller)
+            for (let i = 0; i < Math.round(120 * config.density); i++) {
+                const t = (i / 120) - 0.5;
+                const x = t * mouthWidth * 1.8;
+                const y = -0.5 + (1 - t * t * 4) * 0.04; // Curved lower lip
+                const z = 0.76 + (1 - Math.abs(t * 2)) * 0.04;
+                
+                // Add some thickness
+                const scatter = (Math.random() - 0.5) * 0.02;
+                
+                points.push(x, y + scatter, z);
+                originalPos.push(x, y + scatter, z);
+                colors.push(config.colorPrimary.r * 0.85, config.colorPrimary.g * 0.45, config.colorPrimary.b * 0.55);
+                sizes.push((0.016 + Math.random() * 0.01) * config.particleSize);
+                types.push(2);
+            }
+            
+            // Chin
+            for (let i = 0; i < Math.round(150 * config.density); i++) {
+                const angle = (Math.random() - 0.5) * Math.PI * 0.6;
+                const t = Math.random();
+                const x = Math.sin(angle) * 0.25 * (1 - t * 0.5);
+                const y = -0.75 - t * 0.3;
+                const z = 0.6 + Math.cos(angle) * 0.2 * (1 - t);
+                
+                points.push(x, y, z);
+                originalPos.push(x, y, z);
+                colors.push(config.colorPrimary.r * 0.9, config.colorPrimary.g * 0.9, config.colorPrimary.b * 0.9);
+                sizes.push((0.014 + Math.random() * 0.01) * config.particleSize);
+                types.push(0);
+            }
+            
+            // Jaw line
+            for (let i = 0; i < Math.round(200 * config.density); i++) {
+                const t = (i / 200); // 0 to 1, left to right
+                const side = t < 0.5 ? -1 : 1;
+                const tNorm = Math.abs(t - 0.5) * 2; // 0 at center, 1 at edges
+                
+                const x = side * (0.3 + tNorm * 0.5);
+                const y = -0.6 - tNorm * 0.4;
+                const z = 0.5 - tNorm * 0.3;
+                
+                // Scatter for thickness
+                const scatter = (Math.random() - 0.5) * 0.04;
+                
+                points.push(x + scatter * 0.5, y + scatter, z + scatter * 0.3);
+                originalPos.push(x + scatter * 0.5, y + scatter, z + scatter * 0.3);
+                colors.push(config.colorPrimary.r * 0.85, config.colorPrimary.g * 0.85, config.colorPrimary.b * 0.85);
+                sizes.push((0.013 + Math.random() * 0.01) * config.particleSize);
+                types.push(0);
             }
             
             // Neck - cylinder tapering down from chin

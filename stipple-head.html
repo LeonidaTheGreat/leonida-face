@@ -444,16 +444,31 @@
             for (let pass = 0; pass < passes; pass++) {
                 const isLastPass = (pass === passes - 1) && lastPassChance > 0 && lastPassChance < 1;
                 
-                for (const v of allVertices) {
+                for (let i = 0; i < allVertices.length; i++) {
                     // For partial passes, randomly include
                     if (isLastPass && Math.random() > lastPassChance) continue;
                     
-                    // No position jitter - particles stay on surface
-                    // Variation comes from different drift seeds (float-away animation)
+                    const v = allVertices[i];
+                    let x = v.x, y = v.y, z = v.z;
+                    
+                    // For oversampled passes (pass > 0), interpolate with a nearby vertex
+                    // This spreads particles across the surface, not off it
+                    if (pass > 0) {
+                        // Pick a random nearby vertex (within ~5% of total vertices for locality)
+                        const searchRange = Math.max(10, Math.floor(allVertices.length * 0.02));
+                        const offset = Math.floor(Math.random() * searchRange) - Math.floor(searchRange / 2);
+                        const neighborIdx = Math.max(0, Math.min(allVertices.length - 1, i + offset));
+                        const neighbor = allVertices[neighborIdx];
+                        
+                        // Interpolate between current vertex and neighbor (stay on surface approx)
+                        const t = Math.random() * 0.5; // 0-50% toward neighbor
+                        x = v.x + (neighbor.x - v.x) * t;
+                        y = v.y + (neighbor.y - v.y) * t;
+                        z = v.z + (neighbor.z - v.z) * t;
+                    }
+                    
                     particleBaseData.push({
-                        x: v.x,
-                        y: v.y,
-                        z: v.z,
+                        x, y, z,
                         seed1: Math.random() * Math.PI * 2,
                         seed2: Math.random() * Math.PI * 2,
                         driftX: (Math.random() - 0.5) * 2,

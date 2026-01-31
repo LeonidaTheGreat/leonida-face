@@ -448,7 +448,7 @@
             const originalPos = [];
             const types = []; // 0=face, 1=eye, 2=mouth, 3=ambient, 4=mane
             
-            const baseCount = Math.round(3000 * config.density);
+            const baseCount = Math.round(12000 * config.density); // High density for stippled look
             
             // Head shape
             for (let i = 0; i < baseCount; i++) {
@@ -577,6 +577,43 @@
                 colors.push(0.9, 0.2, 0.5);
                 sizes.push(0.025 * config.particleSize);
                 types.push(2);
+            }
+            
+            // Neck - cylinder tapering down from chin
+            const neckParticles = Math.round(1500 * config.density);
+            for (let i = 0; i < neckParticles; i++) {
+                const t = i / neckParticles;
+                const angle = Math.random() * Math.PI * 2;
+                const height = -1.3 - t * 1.2; // From chin down
+                
+                // Neck radius tapers, then widens at shoulders
+                let radius;
+                if (t < 0.6) {
+                    radius = 0.4 + t * 0.1; // Slight taper
+                } else {
+                    radius = 0.4 + 0.06 + (t - 0.6) * 0.8; // Shoulder widening
+                }
+                
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius * 0.8;
+                
+                // Depth density for neck too
+                let depthChance = 1.0;
+                if (config.depthDensity) {
+                    depthChance = Math.max(0.15, (z / radius + 1) / 2);
+                    depthChance = depthChance * depthChance;
+                }
+                
+                if (Math.random() < depthChance) {
+                    points.push(x, height, z);
+                    originalPos.push(x, height, z);
+                    
+                    // Slightly darker color for neck
+                    const neckColor = config.colorPrimary.clone().multiplyScalar(0.7 + Math.random() * 0.2);
+                    colors.push(neckColor.r, neckColor.g, neckColor.b);
+                    sizes.push((0.015 + Math.random() * 0.015) * config.particleSize);
+                    types.push(0); // Same as face type
+                }
             }
             
             // Lion mane
@@ -871,10 +908,27 @@
                 geometry.attributes.position.needsUpdate = true;
             }
             
-            // Animate constellation opacity
-            if (lineMaterial) {
-                const targetOpacity = config.showConstellation ? 0.15 * config.constellationOpacity : 0;
-                lineMaterial.opacity += (targetOpacity - lineMaterial.opacity) * 0.05;
+            // Animate constellation opacity and positions
+            if (lineMaterial && lineGeometry && lineGeometry.attributes.position) {
+                // Calculate how assembled we are (rough measure)
+                let assemblyAmount = 1;
+                if (geometry && geometry.attributes.position) {
+                    const pos = geometry.attributes.position.array;
+                    let totalDist = 0;
+                    const sampleSize = Math.min(100, pos.length / 3);
+                    for (let i = 0; i < sampleSize; i++) {
+                        const idx = i * 3;
+                        const dx = pos[idx] - originalPositions[idx];
+                        const dy = pos[idx + 1] - originalPositions[idx + 1];
+                        const dz = pos[idx + 2] - originalPositions[idx + 2];
+                        totalDist += Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    }
+                    const avgDist = totalDist / sampleSize;
+                    assemblyAmount = Math.max(0, 1 - avgDist / 2); // 0 when scattered, 1 when assembled
+                }
+                
+                const targetOpacity = config.showConstellation ? 0.15 * assemblyAmount : 0;
+                lineMaterial.opacity += (targetOpacity - lineMaterial.opacity) * 0.1;
             }
             
             // Update bloom

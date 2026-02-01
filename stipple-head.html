@@ -1192,10 +1192,17 @@
                 console.log(`GLTF mesh centered: pos=(${-cx.toFixed(3)}, ${-cy.toFixed(3)}, ${-cz.toFixed(3)})`);
             }
             
-            // Camera always at z=3, target origin
-            camera.position.set(0, 0, 3);
+            // Auto-adjust camera distance based on model size
+            const modelSize = Math.max(
+                centeredBounds.maxX - centeredBounds.minX,
+                centeredBounds.maxY - centeredBounds.minY,
+                centeredBounds.maxZ - centeredBounds.minZ
+            );
+            const cameraDistance = modelSize * 1.5; // 1.5x model size
+            camera.position.set(0, 0, cameraDistance);
             controls.target.set(0, 0, 0);
             controls.update();
+            console.log(`Camera distance: ${cameraDistance.toFixed(2)} (model size: ${modelSize.toFixed(2)})`);
             
             applySettingsToUI();
             initParticles();

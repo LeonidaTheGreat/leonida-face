@@ -1567,6 +1567,7 @@
             modelGroup = new THREE.Group();
             
             const count = particleBaseData.length;
+            console.log(`🔢 PARTICLE COUNT: ${count.toLocaleString()} particles for ${currentModel}`);
             if (count === 0) return;
             
             const positions = new Float32Array(count * 3);

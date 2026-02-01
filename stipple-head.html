@@ -1294,8 +1294,12 @@
             
             // Cap particle count for animated models (skeleton updates are expensive)
             // Increased to 50K since performance is good
-            // No density cap - use full density for all models
-            // const maxAnimatedParticles = 50000;
+            // Cap particle count for animated models (skeleton updates are expensive)
+            const maxAnimatedParticles = 50000;
+            if (skinnedMesh && allVertices.length * densityFactor > maxAnimatedParticles) {
+                densityFactor = maxAnimatedParticles / allVertices.length;
+                console.log(`Capping density for animated model: ${(densityFactor * 100).toFixed(1)}% (~${maxAnimatedParticles} particles)`);
+            }
             // Volume: 0 = no interior, 100 = add same amount of particles filling interior
             const volumeFill = settings.volumeDensity / 100;
             

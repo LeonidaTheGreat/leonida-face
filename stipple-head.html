@@ -1094,16 +1094,8 @@
                 console.log(`Head only: size=${headSize.toFixed(2)}`);
             }
             
-            // Calculate natural scale (head-based)
-            const naturalScale = HEAD_TARGET_SIZE / headSize;
-            
-            // Use Walt's scale for non-Walt models (no scaling up = consistent particle density)
-            if (modelName !== 'walt' && waltReference) {
-                scale = waltReference.scale;
-                console.log(`Using Walt's scale (${scale.toFixed(4)}) instead of model's natural scale (${naturalScale.toFixed(4)})`);
-            } else {
-                scale = naturalScale;
-            }
+            // Each model uses its own natural scale (no cross-model scaling)
+            scale = HEAD_TARGET_SIZE / headSize;
             
             allVertices = vertices.map(v => ({
                 x: (v.x - cx) * scale,
@@ -1180,16 +1172,8 @@
                     headSize = Math.max(skelWidth, skelHeight, skelDepth);
                 }
                 
-                // Calculate natural scale for skeleton
-                const skelNaturalScale = HEAD_TARGET_SIZE / headSize;
-                
-                // Use Walt's scale for non-Walt models (consistent particle density)
-                if (modelName !== 'walt' && waltReference) {
-                    scale = waltReference.scale;
-                    console.log(`Skeleton using Walt's scale (${scale.toFixed(4)}) instead of natural (${skelNaturalScale.toFixed(4)})`);
-                } else {
-                    scale = skelNaturalScale;
-                }
+                // Each model uses its own natural scale (no cross-model scaling)
+                scale = HEAD_TARGET_SIZE / headSize;
                 console.log('Skeleton normalization:', { cx, cy, cz, scale });
             }
             

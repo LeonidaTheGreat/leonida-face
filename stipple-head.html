@@ -630,7 +630,7 @@
                     // For oversampled passes, interpolate along triangle edges
                     if (pass > 0) {
                         // Find a vertex that's actually close in 3D (true mesh neighbor)
-                        const maxDist = 0.15; // Max distance for a true edge neighbor
+                        const maxDist = 0.3; // Max distance for a true edge neighbor
                         let neighbor = null;
                         
                         for (let attempt = 0; attempt < 10; attempt++) {

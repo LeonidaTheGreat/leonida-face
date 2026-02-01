@@ -1176,6 +1176,14 @@
             window._debug = { skeletonNormParams, bounds };
             console.log('Final skeletonNormParams:', skeletonNormParams);
             
+            // Apply same transform to GLTF mesh so it matches particles
+            // Particles: (v - center) * scale → Mesh: scale then translate
+            if (window.gltfScene) {
+                window.gltfScene.scale.set(scale, scale, scale);
+                window.gltfScene.position.set(-cx * scale, -cy * scale, -cz * scale);
+                console.log(`GLTF mesh transform: scale=${scale.toFixed(4)}, pos=(${(-cx*scale).toFixed(3)}, ${(-cy*scale).toFixed(3)}, ${(-cz*scale).toFixed(3)})`);
+            }
+            
             // Camera always at z=3, target origin (head is centered there)
             camera.position.set(0, 0, 3);
             controls.target.set(0, 0, 0);

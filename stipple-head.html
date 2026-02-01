@@ -1090,22 +1090,13 @@
                 console.log(`Head only: size=${headSize.toFixed(2)}`);
             }
             
-            // Walt keeps scaling, other models don't
-            if (modelName === 'walt') {
-                scale = HEAD_TARGET_SIZE / headSize;
-                allVertices = vertices.map(v => ({
-                    x: (v.x - cx) * scale,
-                    y: (v.y - cy) * scale,
-                    z: (v.z - cz) * scale
-                }));
-            } else {
-                scale = 1.0; // No scaling for non-Walt models
-                allVertices = vertices.map(v => ({
-                    x: v.x - cx,
-                    y: v.y - cy,
-                    z: v.z - cz
-                }));
-            }
+            scale = HEAD_TARGET_SIZE / headSize;
+            
+            allVertices = vertices.map(v => ({
+                x: (v.x - cx) * scale,
+                y: (v.y - cy) * scale,
+                z: (v.z - cz) * scale
+            }));
             
             // For skinned meshes, we need to compute bounds from bone-transformed positions
             // because the bind matrix may include a scale factor
@@ -1176,12 +1167,7 @@
                     headSize = Math.max(skelWidth, skelHeight, skelDepth);
                 }
                 
-                // Walt keeps scaling, other models don't
-                if (modelName === 'walt') {
-                    scale = HEAD_TARGET_SIZE / headSize;
-                } else {
-                    scale = 1.0; // No scaling for non-Walt models
-                }
+                scale = HEAD_TARGET_SIZE / headSize;
                 console.log('Skeleton normalization:', { cx, cy, cz, scale });
             }
             

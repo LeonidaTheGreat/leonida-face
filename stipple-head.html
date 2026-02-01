@@ -1237,6 +1237,14 @@
             controls.target.set(0, 0, 0);
             controls.update();
             
+            // Apply same transformation to GLTF scene (for debug mesh)
+            if (window.gltfScene && skeletonNormParams) {
+                const { cx, cy, cz, scale, zOffset } = skeletonNormParams;
+                window.gltfScene.position.set(-cx * scale, -cy * scale, -cz * scale + (zOffset || 0));
+                window.gltfScene.scale.set(scale, scale, scale);
+                console.log(`GLTF scene transform: pos=(${window.gltfScene.position.x.toFixed(3)}, ${window.gltfScene.position.y.toFixed(3)}, ${window.gltfScene.position.z.toFixed(3)}), scale=${scale.toFixed(4)}`);
+            }
+            
             applySettingsToUI();
             initParticles();
             

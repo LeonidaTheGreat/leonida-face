@@ -1093,11 +1093,20 @@
             scale = HEAD_TARGET_SIZE / headSize;
             
             // Center only, no scaling
+            console.log(`Model centering: center=(${cx.toFixed(3)}, ${cy.toFixed(3)}, ${cz.toFixed(3)}), scale=${scale.toFixed(4)} (not applied)`);
             allVertices = vertices.map(v => ({
                 x: v.x - cx,
                 y: v.y - cy,
                 z: v.z - cz
             }));
+            // Log bounds after centering
+            const centeredBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+            allVertices.forEach(v => {
+                centeredBounds.minX = Math.min(centeredBounds.minX, v.x); centeredBounds.maxX = Math.max(centeredBounds.maxX, v.x);
+                centeredBounds.minY = Math.min(centeredBounds.minY, v.y); centeredBounds.maxY = Math.max(centeredBounds.maxY, v.y);
+                centeredBounds.minZ = Math.min(centeredBounds.minZ, v.z); centeredBounds.maxZ = Math.max(centeredBounds.maxZ, v.z);
+            });
+            console.log(`After centering: X=[${centeredBounds.minX.toFixed(3)}, ${centeredBounds.maxX.toFixed(3)}], Y=[${centeredBounds.minY.toFixed(3)}, ${centeredBounds.maxY.toFixed(3)}], Z=[${centeredBounds.minZ.toFixed(3)}, ${centeredBounds.maxZ.toFixed(3)}]`);
             
             // For skinned meshes, we need to compute bounds from bone-transformed positions
             // because the bind matrix may include a scale factor

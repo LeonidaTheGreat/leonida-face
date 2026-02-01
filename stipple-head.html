@@ -1044,9 +1044,9 @@
                 bounds.minZ = Math.min(bounds.minZ, v.z); bounds.maxZ = Math.max(bounds.maxZ, v.z);
             });
             
-            // Get model settings
-            const settings = modelSettings[modelName] || { headOnly: false };
-            const isHeadOnly = settings.headOnly;
+            // Get model config (not to be confused with global settings)
+            const modelConfig = modelSettings[modelName] || { headOnly: false };
+            const isHeadOnly = modelConfig.headOnly;
             
             const modelWidth = bounds.maxX - bounds.minX;
             const modelHeight = bounds.maxY - bounds.minY;

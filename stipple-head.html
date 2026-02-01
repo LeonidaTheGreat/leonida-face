@@ -168,7 +168,35 @@
                 <option value="walt">Walt Head</option>
                 <option value="female">Female (Full Body)</option>
                 <option value="male">Male (Full Body)</option>
+                <option value="leonida">Leonida (Animated)</option>
+                <optgroup label="─── Meshy Characters ───">
+                    <option value="wanderer">Timeless Wanderer</option>
+                    <option value="gothic">Gothic Character</option>
+                    <option value="explorer">Explorer Pose</option>
+                    <option value="survivor">Post-Apocalyptic Survivor</option>
+                </optgroup>
+                <optgroup label="─── Rigged Bipeds ───">
+                    <option value="biped1">Biped 1 (Animated)</option>
+                    <option value="biped2_run">Biped 2 - Running</option>
+                    <option value="biped2_walk">Biped 2 - Walking</option>
+                    <option value="biped3">Biped 3 (Animated)</option>
+                    <option value="biped4">Biped 4 (Animated)</option>
+                    <option value="biped5">Biped 5 (Animated)</option>
+                </optgroup>
             </select>
+        </div>
+        
+        <div class="slider-row" id="animationRow" style="display: none;">
+            <label>Animation</label>
+            <select id="animationSelect">
+                <option value="">-- None --</option>
+            </select>
+        </div>
+        
+        <div class="slider-row" id="showMeshRow" style="display: none;">
+            <label>
+                <input type="checkbox" id="showMesh"> Show Mesh (debug)
+            </label>
         </div>
         
         <h3>Particles</h3>
@@ -432,6 +460,7 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -472,6 +501,7 @@
         let pointsMesh = null;
         let allVertices = [];
         let particleBaseData = [];
+        let skeletonNormParams = null;
         let isAssembled = true;
         // Assembly state managed by shader uniform now
         let headAnimationEnabled = false;
@@ -641,23 +671,107 @@
         const modelUrls = {
             walt: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/walt/WaltHead.obj',
             female: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/female02/female02.obj',
-            male: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/male02/male02.obj'
+            male: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/male02/male02.obj',
+            leonida: 'models/meshy_merged_animations.glb',
+            // Meshy AI characters (textured, no rig)
+            wanderer: 'models/Timeless_Wanderer.glb',
+            gothic: 'models/Gothic_Character.glb',
+            explorer: 'models/Explorer_Pose.glb',
+            survivor: 'models/Post_Apocalyptic_Survivor.glb',
+            // Rigged bipeds with animations
+            biped1: 'models/Biped1_Merged_Animations.glb',
+            biped2_run: 'models/Biped2_Running.glb',
+            biped2_walk: 'models/Biped2_Walking.glb',
+            biped3: 'models/Biped3_Merged_Animations.glb',
+            biped4: 'models/Biped4_Merged_Animations.glb',
+            biped5: 'models/Biped5_Merged_Animations.glb'
         };
         
         // Camera settings per model
         const cameraSettings = {
             walt: { z: 3, targetY: 0 },
             female: { z: 3, targetY: 0 },
-            male: { z: 3, targetY: 0 }
+            male: { z: 3, targetY: 0 },
+            leonida: { z: 3, targetY: 0 },
+            // Meshy characters - full body view
+            wanderer: { z: 5, targetY: 0.8 },
+            gothic: { z: 5, targetY: 0.8 },
+            explorer: { z: 5, targetY: 0.8 },
+            survivor: { z: 5, targetY: 0.8 },
+            // Rigged bipeds
+            biped1: { z: 4, targetY: 1.0 },
+            biped2_run: { z: 4, targetY: 1.0 },
+            biped2_walk: { z: 4, targetY: 1.0 },
+            biped3: { z: 4, targetY: 1.0 },
+            biped4: { z: 4, targetY: 1.0 },
+            biped5: { z: 4, targetY: 1.0 }
         };
         
-        // Model-specific normalization settings
-        // For full-body models, we extract the head region and scale to match Walt
-        const modelNormalization = {
-            walt: { type: 'full', headScale: 1.0 },
-            female: { type: 'body', headTopPercent: 0.12, headScale: 2.5 }, // Head is top 12% of model
-            male: { type: 'body', headTopPercent: 0.12, headScale: 2.5 }
+        // Model normalization: all models center on head, scale so head = 2 units
+        const HEAD_TARGET_SIZE = 2.0;
+        const HEAD_TOP_PERCENT = 0.15; // Top 15% of model height = head region
+        
+        // Model settings: headOnly=true means the model IS just a head
+        const modelSettings = {
+            walt: { headOnly: true },
+            female: { headOnly: false },
+            male: { headOnly: false },
+            leonida: { headOnly: false },
+            wanderer: { headOnly: false },
+            gothic: { headOnly: false },
+            explorer: { headOnly: false },
+            survivor: { headOnly: false },
+            biped1: { headOnly: false },
+            biped2_run: { headOnly: false },
+            biped2_walk: { headOnly: false },
+            biped3: { headOnly: false },
+            biped4: { headOnly: false },
+            biped5: { headOnly: false }
         };
+        
+        // Animation state
+        let mixer = null;
+        let currentAction = null;
+        let skinnedMesh = null;
+        let animationClips = [];
+        const gltfLoader = new GLTFLoader();
+        const clock = new THREE.Clock();
+        
+        // Shared animation library - loaded once, applied to compatible skeletons
+        let sharedAnimationClips = [];
+        let sharedAnimationsLoaded = false;
+        
+        // Load shared animations from library file
+        async function loadSharedAnimations() {
+            if (sharedAnimationsLoaded) return;
+            
+            try {
+                const gltf = await new Promise((resolve, reject) => {
+                    gltfLoader.load('models/meshy_merged_animations.glb', resolve, undefined, reject);
+                });
+                sharedAnimationClips = gltf.animations || [];
+                sharedAnimationsLoaded = true;
+                console.log(`Loaded ${sharedAnimationClips.length} shared animations from library`);
+            } catch (err) {
+                console.warn('Could not load shared animation library:', err);
+            }
+        }
+        
+        // Check if skeleton has compatible bone structure for retargeting
+        function isSkeletonCompatible(skeleton) {
+            if (!skeleton || !skeleton.bones) return false;
+            
+            // Check for standard humanoid bone names
+            const boneNames = skeleton.bones.map(b => b.name.toLowerCase());
+            const requiredBones = ['hips', 'spine', 'head'];
+            
+            return requiredBones.every(req => 
+                boneNames.some(name => name.includes(req))
+            );
+        }
+        
+        // Preload shared animations
+        loadSharedAnimations();
         
         let currentModel = 'walt';
         const loader = new OBJLoader();
@@ -667,143 +781,455 @@
             currentModel = modelName;
             document.getElementById('status').textContent = 'Loading model...';
             
+            // Clear previous animation state
+            if (mixer) {
+                mixer.stopAllAction();
+                mixer = null;
+            }
+            // Remove previous GLTF scene if any
+            if (window.gltfScene) {
+                scene.remove(window.gltfScene);
+                window.gltfScene = null;
+            }
+            skinnedMesh = null;
+            animationClips = [];
+            
+            // Hide/show animation controls
+            const animRow = document.getElementById('animationRow');
+            const animSelect = document.getElementById('animationSelect');
+            
             const url = modelUrls[modelName];
             if (!url) return;
             
-            loader.load(url, (obj) => {
-                document.getElementById('status').textContent = 'Processing...';
-                
-                let vertices = [];
-                let edges = new Map(); // vertexIdx -> Set of neighbor indices
-                
-                obj.traverse((child) => {
-                    if (child.isMesh && child.geometry) {
-                        const positions = child.geometry.attributes.position;
-                        const vertexOffset = vertices.length;
-                        
-                        // Collect vertices
-                        for (let i = 0; i < positions.count; i++) {
-                            vertices.push({
-                                x: positions.getX(i),
-                                y: positions.getY(i),
-                                z: positions.getZ(i)
-                            });
-                        }
-                        
-                        // Extract edges from faces
-                        const index = child.geometry.index;
-                        if (index) {
-                            // Indexed geometry - every 3 indices form a triangle
-                            for (let i = 0; i < index.count; i += 3) {
-                                const a = vertexOffset + index.getX(i);
-                                const b = vertexOffset + index.getX(i + 1);
-                                const c = vertexOffset + index.getX(i + 2);
-                                
-                                // Add edges for this triangle
-                                if (!edges.has(a)) edges.set(a, new Set());
-                                if (!edges.has(b)) edges.set(b, new Set());
-                                if (!edges.has(c)) edges.set(c, new Set());
-                                edges.get(a).add(b); edges.get(a).add(c);
-                                edges.get(b).add(a); edges.get(b).add(c);
-                                edges.get(c).add(a); edges.get(c).add(b);
-                            }
-                        } else {
-                            // Non-indexed - every 3 vertices form a triangle
-                            for (let i = 0; i < positions.count; i += 3) {
-                                const a = vertexOffset + i;
-                                const b = vertexOffset + i + 1;
-                                const c = vertexOffset + i + 2;
-                                
-                                if (!edges.has(a)) edges.set(a, new Set());
-                                if (!edges.has(b)) edges.set(b, new Set());
-                                if (!edges.has(c)) edges.set(c, new Set());
-                                edges.get(a).add(b); edges.get(a).add(c);
-                                edges.get(b).add(a); edges.get(b).add(c);
-                                edges.get(c).add(a); edges.get(c).add(b);
-                            }
-                        }
-                    }
-                });
-                
-                // Convert edge map to array for fast lookup
-                vertexEdges = [];
-                for (let i = 0; i < vertices.length; i++) {
-                    vertexEdges.push(edges.has(i) ? Array.from(edges.get(i)) : []);
-                }
-                
-                // DEBUG: Check edge extraction
-                const edgeCount = vertexEdges.filter(e => e.length > 0).length;
-                console.log(`DEBUG: vertices=${vertices.length}, verticesWithEdges=${edgeCount}, edges.size=${edges.size}`);
-                if (vertexEdges[0]) console.log(`DEBUG: first vertex edges:`, vertexEdges[0]);
-                
-                // Get full model bounds
-                const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
-                vertices.forEach(v => {
-                    bounds.minX = Math.min(bounds.minX, v.x); bounds.maxX = Math.max(bounds.maxX, v.x);
-                    bounds.minY = Math.min(bounds.minY, v.y); bounds.maxY = Math.max(bounds.maxY, v.y);
-                    bounds.minZ = Math.min(bounds.minZ, v.z); bounds.maxZ = Math.max(bounds.maxZ, v.z);
-                });
-                
-                const normSettings = modelNormalization[modelName] || { type: 'full', headScale: 1.0 };
-                
-                let cx, cy, cz, scale;
-                
-                if (normSettings.type === 'body') {
-                    // For full-body models: center and scale based on head region
-                    const modelHeight = bounds.maxY - bounds.minY;
-                    const headThreshold = bounds.maxY - modelHeight * normSettings.headTopPercent;
+            const isGLB = url.endsWith('.glb') || url.endsWith('.gltf');
+            
+            if (isGLB) {
+                // Load GLB/GLTF with animations
+                gltfLoader.load(url, (gltf) => {
+                    document.getElementById('status').textContent = 'Processing GLTF...';
+                    console.log('GLTF loaded:', gltf);
                     
-                    // Get head region bounds
-                    const headBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
-                    vertices.forEach(v => {
-                        if (v.y >= headThreshold) {
-                            headBounds.minX = Math.min(headBounds.minX, v.x); headBounds.maxX = Math.max(headBounds.maxX, v.x);
-                            headBounds.minY = Math.min(headBounds.minY, v.y); headBounds.maxY = Math.max(headBounds.maxY, v.y);
-                            headBounds.minZ = Math.min(headBounds.minZ, v.z); headBounds.maxZ = Math.max(headBounds.maxZ, v.z);
+                    // Store animations from the model
+                    let modelAnims = gltf.animations || [];
+                    console.log(`Found ${modelAnims.length} animations in model`);
+                    
+                    // Find skinned mesh first to check skeleton compatibility
+                    let tempSkinnedMesh = null;
+                    gltf.scene.traverse((child) => {
+                        if (child.isSkinnedMesh && !tempSkinnedMesh) {
+                            tempSkinnedMesh = child;
                         }
                     });
                     
-                    // Center on head
+                    // Merge with shared animations if skeleton is compatible
+                    if (tempSkinnedMesh && tempSkinnedMesh.skeleton && isSkeletonCompatible(tempSkinnedMesh.skeleton)) {
+                        // Get existing animation names to avoid duplicates
+                        const existingNames = new Set(modelAnims.map(a => a.name));
+                        
+                        // Add shared animations that don't already exist
+                        let addedCount = 0;
+                        sharedAnimationClips.forEach(clip => {
+                            if (!existingNames.has(clip.name)) {
+                                modelAnims.push(clip);
+                                addedCount++;
+                            }
+                        });
+                        
+                        if (addedCount > 0) {
+                            console.log(`Added ${addedCount} shared animations (skeleton compatible)`);
+                        }
+                    } else if (tempSkinnedMesh) {
+                        console.log('Skeleton not compatible with shared animations');
+                    }
+                    
+                    animationClips = modelAnims;
+                    
+                    // Populate animation dropdown and auto-play first animation
+                    if (animationClips.length > 0) {
+                        animRow.style.display = 'block';
+                        animSelect.innerHTML = '<option value="">-- None --</option>';
+                        animationClips.forEach((clip, idx) => {
+                            const opt = document.createElement('option');
+                            opt.value = idx;
+                            opt.textContent = clip.name || `Animation ${idx}`;
+                            animSelect.appendChild(opt);
+                        });
+                        
+                        // Auto-play will happen after mixer is created (see below)
+                    } else {
+                        animRow.style.display = 'none';
+                    }
+                    
+                    let vertices = [];
+                    let edges = new Map();
+                    
+                    gltf.scene.traverse((child) => {
+                        if (child.isSkinnedMesh) {
+                            skinnedMesh = child;
+                            console.log('Found SkinnedMesh:', child.name, 'applyBoneTransform:', typeof child.applyBoneTransform);
+                        }
+                        if (child.isMesh && child.geometry) {
+                            const positions = child.geometry.attributes.position;
+                            const vertexOffset = vertices.length;
+                            
+                            // For skinned mesh, we need world positions
+                            // First update the skeleton
+                            if (child.isSkinnedMesh && child.skeleton) {
+                                child.skeleton.update();
+                            }
+                            
+                            // Get positions (in local space for now)
+                            for (let i = 0; i < positions.count; i++) {
+                                vertices.push({
+                                    x: positions.getX(i),
+                                    y: positions.getY(i),
+                                    z: positions.getZ(i)
+                                });
+                            }
+                            
+                            // Extract edges from faces
+                            const index = child.geometry.index;
+                            if (index) {
+                                console.log(`Extracting edges from indexed geometry: ${index.count} indices`);
+                                for (let i = 0; i < index.count; i += 3) {
+                                    const a = vertexOffset + index.getX(i);
+                                    const b = vertexOffset + index.getX(i + 1);
+                                    const c = vertexOffset + index.getX(i + 2);
+                                    
+                                    if (!edges.has(a)) edges.set(a, new Set());
+                                    if (!edges.has(b)) edges.set(b, new Set());
+                                    if (!edges.has(c)) edges.set(c, new Set());
+                                    edges.get(a).add(b); edges.get(a).add(c);
+                                    edges.get(b).add(a); edges.get(b).add(c);
+                                    edges.get(c).add(a); edges.get(c).add(b);
+                                }
+                            } else {
+                                // Non-indexed geometry fallback
+                                console.log(`Extracting edges from non-indexed geometry: ${positions.count} vertices`);
+                                for (let i = 0; i < positions.count; i += 3) {
+                                    const a = vertexOffset + i;
+                                    const b = vertexOffset + i + 1;
+                                    const c = vertexOffset + i + 2;
+                                    
+                                    if (!edges.has(a)) edges.set(a, new Set());
+                                    if (!edges.has(b)) edges.set(b, new Set());
+                                    if (!edges.has(c)) edges.set(c, new Set());
+                                    edges.get(a).add(b); edges.get(a).add(c);
+                                    edges.get(b).add(a); edges.get(b).add(c);
+                                    edges.get(c).add(a); edges.get(c).add(b);
+                                }
+                            }
+                        }
+                    });
+                    
+                    console.log(`GLTF edge extraction complete: ${edges.size} vertices with edges`);
+                    
+                    // Create animation mixer and auto-play Idle
+                    if (skinnedMesh) {
+                        mixer = new THREE.AnimationMixer(gltf.scene);
+                        
+                        // Auto-play an Idle animation
+                        if (animationClips.length > 0) {
+                            let idleIdx = animationClips.findIndex(clip => 
+                                clip.name.toLowerCase().includes('idle')
+                            );
+                            if (idleIdx === -1) idleIdx = 0;
+                            document.getElementById('animationSelect').value = String(idleIdx);
+                            currentAction = mixer.clipAction(animationClips[idleIdx]);
+                            currentAction.play();
+                            console.log(`Auto-playing: ${animationClips[idleIdx].name}`);
+                        }
+                    }
+                    
+                    // Add GLTF scene to Three.js scene (hidden by default)
+                    // Scale will be set after processVertices computes normalization
+                    gltf.scene.visible = false;
+                    scene.add(gltf.scene);
+                    window.gltfScene = gltf.scene;
+                    
+                    // Show mesh toggle
+                    document.getElementById('showMeshRow').style.display = 'block';
+                    document.getElementById('showMesh').checked = false;
+                    
+                    processVertices(vertices, edges, modelName);
+                    
+                }, (progress) => {
+                    const pct = progress.loaded / progress.total * 100;
+                    document.getElementById('status').textContent = `Loading... ${pct.toFixed(0)}%`;
+                }, (error) => {
+                    console.error('GLTF load error:', error);
+                    document.getElementById('status').textContent = 'Error loading model';
+                });
+            } else {
+                // Load OBJ (original code)
+                animRow.style.display = 'none';
+                document.getElementById('showMeshRow').style.display = 'none';
+                skeletonNormParams = null; // OBJ has no skeleton
+                
+                loader.load(url, (obj) => {
+                    document.getElementById('status').textContent = 'Processing...';
+                    
+                    let vertices = [];
+                    let edges = new Map();
+                    
+                    obj.traverse((child) => {
+                        if (child.isMesh && child.geometry) {
+                            const positions = child.geometry.attributes.position;
+                            const vertexOffset = vertices.length;
+                            
+                            for (let i = 0; i < positions.count; i++) {
+                                vertices.push({
+                                    x: positions.getX(i),
+                                    y: positions.getY(i),
+                                    z: positions.getZ(i)
+                                });
+                            }
+                            
+                            const index = child.geometry.index;
+                            if (index) {
+                                for (let i = 0; i < index.count; i += 3) {
+                                    const a = vertexOffset + index.getX(i);
+                                    const b = vertexOffset + index.getX(i + 1);
+                                    const c = vertexOffset + index.getX(i + 2);
+                                    
+                                    if (!edges.has(a)) edges.set(a, new Set());
+                                    if (!edges.has(b)) edges.set(b, new Set());
+                                    if (!edges.has(c)) edges.set(c, new Set());
+                                    edges.get(a).add(b); edges.get(a).add(c);
+                                    edges.get(b).add(a); edges.get(b).add(c);
+                                    edges.get(c).add(a); edges.get(c).add(b);
+                                }
+                            } else {
+                                for (let i = 0; i < positions.count; i += 3) {
+                                    const a = vertexOffset + i;
+                                    const b = vertexOffset + i + 1;
+                                    const c = vertexOffset + i + 2;
+                                    
+                                    if (!edges.has(a)) edges.set(a, new Set());
+                                    if (!edges.has(b)) edges.set(b, new Set());
+                                    if (!edges.has(c)) edges.set(c, new Set());
+                                    edges.get(a).add(b); edges.get(a).add(c);
+                                    edges.get(b).add(a); edges.get(b).add(c);
+                                    edges.get(c).add(a); edges.get(c).add(b);
+                                }
+                            }
+                        }
+                    });
+                    
+                    processVertices(vertices, edges, modelName);
+                });
+            }
+        }
+        
+        // Shared vertex processing logic
+        function processVertices(vertices, edges, modelName) {
+            // Convert edge map to array for fast lookup
+            vertexEdges = [];
+            for (let i = 0; i < vertices.length; i++) {
+                vertexEdges.push(edges.has(i) ? Array.from(edges.get(i)) : []);
+            }
+            
+            const edgeCount = vertexEdges.filter(e => e.length > 0).length;
+            console.log(`DEBUG: vertices=${vertices.length}, verticesWithEdges=${edgeCount}, edges.size=${edges.size}`);
+            
+            // Get full model bounds
+            const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+            vertices.forEach(v => {
+                bounds.minX = Math.min(bounds.minX, v.x); bounds.maxX = Math.max(bounds.maxX, v.x);
+                bounds.minY = Math.min(bounds.minY, v.y); bounds.maxY = Math.max(bounds.maxY, v.y);
+                bounds.minZ = Math.min(bounds.minZ, v.z); bounds.maxZ = Math.max(bounds.maxZ, v.z);
+            });
+            
+            // Get model settings
+            const settings = modelSettings[modelName] || { headOnly: false };
+            const isHeadOnly = settings.headOnly;
+            
+            const modelWidth = bounds.maxX - bounds.minX;
+            const modelHeight = bounds.maxY - bounds.minY;
+            const modelDepth = bounds.maxZ - bounds.minZ;
+            
+            let cx, cy, cz, scale, headSize;
+            
+            if (!isHeadOnly) {
+                // Full body: find head region (top HEAD_TOP_PERCENT of height)
+                const headThreshold = bounds.maxY - modelHeight * HEAD_TOP_PERCENT;
+                
+                const headBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+                vertices.forEach(v => {
+                    if (v.y >= headThreshold) {
+                        headBounds.minX = Math.min(headBounds.minX, v.x); headBounds.maxX = Math.max(headBounds.maxX, v.x);
+                        headBounds.minY = Math.min(headBounds.minY, v.y); headBounds.maxY = Math.max(headBounds.maxY, v.y);
+                        headBounds.minZ = Math.min(headBounds.minZ, v.z); headBounds.maxZ = Math.max(headBounds.maxZ, v.z);
+                    }
+                });
+                
+                // Validate head bounds
+                if (headBounds.minX === Infinity) {
+                    console.warn('No head vertices found, using full bounds');
+                    cx = (bounds.minX + bounds.maxX) / 2;
+                    cy = (bounds.minY + bounds.maxY) / 2;
+                    cz = (bounds.minZ + bounds.maxZ) / 2;
+                    headSize = Math.max(modelWidth, modelHeight, modelDepth);
+                } else {
                     cx = (headBounds.minX + headBounds.maxX) / 2;
                     cy = (headBounds.minY + headBounds.maxY) / 2;
                     cz = (headBounds.minZ + headBounds.maxZ) / 2;
-                    
-                    // Scale so head is same size as Walt head (which fills ~2 units)
-                    const headSize = Math.max(
+                    headSize = Math.max(
                         headBounds.maxX - headBounds.minX,
                         headBounds.maxY - headBounds.minY,
                         headBounds.maxZ - headBounds.minZ
                     );
-                    scale = 2 / headSize;
-                } else {
-                    // For head-only models: center and scale the whole thing
-                    cx = (bounds.minX + bounds.maxX) / 2;
-                    cy = (bounds.minY + bounds.maxY) / 2;
-                    cz = (bounds.minZ + bounds.maxZ) / 2;
-                    scale = 2 / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, bounds.maxZ - bounds.minZ);
+                }
+                console.log(`Full body: headThreshold=${headThreshold.toFixed(2)}, headSize=${headSize.toFixed(2)}`);
+            } else {
+                // Head-only: use full bounds
+                cx = (bounds.minX + bounds.maxX) / 2;
+                cy = (bounds.minY + bounds.maxY) / 2;
+                cz = (bounds.minZ + bounds.maxZ) / 2;
+                headSize = Math.max(modelWidth, modelHeight, modelDepth);
+                console.log(`Head only: size=${headSize.toFixed(2)}`);
+            }
+            
+            scale = HEAD_TARGET_SIZE / headSize;
+            
+            allVertices = vertices.map(v => ({
+                x: (v.x - cx) * scale,
+                y: (v.y - cy) * scale,
+                z: (v.z - cz) * scale
+            }));
+            
+            // For skinned meshes, we need to compute bounds from bone-transformed positions
+            // because the bind matrix may include a scale factor
+            if (skinnedMesh && skinnedMesh.applyBoneTransform) {
+                console.log('Computing skeleton bounds from bone-transformed positions...');
+                const meshPos = skinnedMesh.geometry.attributes.position;
+                const skelBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+                const testVec = new THREE.Vector3();
+                const transformedVerts = []; // Store for head detection
+                
+                // Sample ALL vertices for accurate head detection (not just 2000)
+                const step = 1; // Sample every vertex
+                for (let i = 0; i < meshPos.count; i += step) {
+                    testVec.fromBufferAttribute(meshPos, i);
+                    skinnedMesh.applyBoneTransform(i, testVec);
+                    skelBounds.minX = Math.min(skelBounds.minX, testVec.x);
+                    skelBounds.maxX = Math.max(skelBounds.maxX, testVec.x);
+                    skelBounds.minY = Math.min(skelBounds.minY, testVec.y);
+                    skelBounds.maxY = Math.max(skelBounds.maxY, testVec.y);
+                    skelBounds.minZ = Math.min(skelBounds.minZ, testVec.z);
+                    skelBounds.maxZ = Math.max(skelBounds.maxZ, testVec.z);
+                    transformedVerts.push({ x: testVec.x, y: testVec.y, z: testVec.z });
                 }
                 
-                allVertices = vertices.map(v => ({
-                    x: (v.x - cx) * scale,
-                    y: (v.y - cy) * scale,
-                    z: (v.z - cz) * scale
-                }));
+                console.log('Skeleton bounds:', skelBounds);
                 
-                // Adjust camera for this model
-                const camSettings = cameraSettings[modelName] || { z: 3, targetY: 0 };
-                camera.position.set(0, 0, camSettings.z);
-                controls.target.set(0, camSettings.targetY, 0);
-                controls.update();
+                const skelWidth = skelBounds.maxX - skelBounds.minX;
+                const skelHeight = skelBounds.maxY - skelBounds.minY;
+                const skelDepth = skelBounds.maxZ - skelBounds.minZ;
                 
-                applySettingsToUI();
-                initParticles();
-            });
+                if (!isHeadOnly) {
+                    // Find head region in skeleton
+                    const headThreshold = skelBounds.maxY - skelHeight * HEAD_TOP_PERCENT;
+                    
+                    const headBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+                    transformedVerts.forEach(v => {
+                        if (v.y >= headThreshold) {
+                            headBounds.minX = Math.min(headBounds.minX, v.x);
+                            headBounds.maxX = Math.max(headBounds.maxX, v.x);
+                            headBounds.minY = Math.min(headBounds.minY, v.y);
+                            headBounds.maxY = Math.max(headBounds.maxY, v.y);
+                            headBounds.minZ = Math.min(headBounds.minZ, v.z);
+                            headBounds.maxZ = Math.max(headBounds.maxZ, v.z);
+                        }
+                    });
+                    
+                    if (headBounds.minX === Infinity) {
+                        console.warn('No skeleton head vertices found, using full bounds');
+                        cx = (skelBounds.minX + skelBounds.maxX) / 2;
+                        cy = (skelBounds.minY + skelBounds.maxY) / 2;
+                        cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
+                        headSize = Math.max(skelWidth, skelHeight, skelDepth);
+                    } else {
+                        cx = (headBounds.minX + headBounds.maxX) / 2;
+                        cy = (headBounds.minY + headBounds.maxY) / 2;
+                        cz = (headBounds.minZ + headBounds.maxZ) / 2;
+                        headSize = Math.max(
+                            headBounds.maxX - headBounds.minX,
+                            headBounds.maxY - headBounds.minY,
+                            headBounds.maxZ - headBounds.minZ
+                        );
+                    }
+                    console.log('Skeleton head:', { cx, cy, cz, headSize });
+                } else {
+                    cx = (skelBounds.minX + skelBounds.maxX) / 2;
+                    cy = (skelBounds.minY + skelBounds.maxY) / 2;
+                    cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
+                    headSize = Math.max(skelWidth, skelHeight, skelDepth);
+                }
+                
+                scale = HEAD_TARGET_SIZE / headSize;
+                console.log('Skeleton normalization:', { cx, cy, cz, scale });
+            }
+            
+            // Store normalization params for skeleton animation
+            skeletonNormParams = { cx, cy, cz, scale };
+            window._debug = { skeletonNormParams, bounds };
+            console.log('Final skeletonNormParams:', skeletonNormParams);
+            
+            // Camera always at z=3, target origin (head is centered there)
+            camera.position.set(0, 0, 3);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            
+            applySettingsToUI();
+            initParticles();
+            
+            document.getElementById('status').textContent = `Loaded: ${vertices.length} vertices`;
+            
+            // Auto-play handled in GLTF loader
         }
+        
+        // Animation selection handler with crossfade blending
+        const CROSSFADE_DURATION = 0.5; // seconds
+        
+        document.getElementById('animationSelect').addEventListener('change', (e) => {
+            if (!mixer || animationClips.length === 0) return;
+            
+            const idx = parseInt(e.target.value);
+            if (!isNaN(idx) && animationClips[idx]) {
+                const newAction = mixer.clipAction(animationClips[idx]);
+                
+                if (currentAction && currentAction !== newAction) {
+                    // Crossfade from current to new animation
+                    newAction.reset();
+                    newAction.play();
+                    currentAction.crossFadeTo(newAction, CROSSFADE_DURATION, true);
+                } else {
+                    // No current action, just play
+                    newAction.play();
+                }
+                
+                currentAction = newAction;
+                console.log(`Playing animation: ${animationClips[idx].name}`);
+            } else if (currentAction) {
+                // "None" selected - fade out
+                currentAction.fadeOut(CROSSFADE_DURATION);
+                currentAction = null;
+            }
+        });
+        
+        // Show/hide mesh toggle
+        document.getElementById('showMesh').addEventListener('change', (e) => {
+            if (window.gltfScene) {
+                window.gltfScene.visible = e.target.checked;
+            }
+        });
         
         // Load initial model
         loadModel('walt');
         
         let vertexSurfaceScore = []; // 0 = interior, 1 = surface
+        let particleBounds = { minZ: -1, maxZ: 1 }; // Track actual Z bounds for shader
         
         function computeSurfaceData() {
             // Bin vertices by angle and find max radius per bin
@@ -850,7 +1276,15 @@
         
         function initParticles() {
             // Density: 100 = all original vertices, 200 = 2x oversampling, etc.
-            const densityFactor = settings.density / 100;
+            let densityFactor = settings.density / 100;
+            
+            // Cap particle count for animated models (skeleton updates are expensive)
+            // Increased to 50K since performance is good
+            const maxAnimatedParticles = 50000;
+            if (skinnedMesh && allVertices.length * densityFactor > maxAnimatedParticles) {
+                densityFactor = maxAnimatedParticles / allVertices.length;
+                console.log(`Capping density for animated model: ${(densityFactor * 100).toFixed(1)}% (~${maxAnimatedParticles} particles)`);
+            }
             // Volume: 0 = no interior, 100 = add same amount of particles filling interior
             const volumeFill = settings.volumeDensity / 100;
             
@@ -917,11 +1351,34 @@
                         sz = v.z + tz * (Math.random() - 0.5) * 0.5;
                     }
                     
+                    // For constellation: if interpolating along edge, store both vertices
+                    let neighborIdx = -1;
+                    let edgeT = 0;
+                    if (vertexEdges[i] && vertexEdges[i].length > 0) {
+                        const neighbors = vertexEdges[i];
+                        neighborIdx = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        // Recalculate t since we used random above
+                        if (cx !== v.x || cy !== v.y || cz !== v.z) {
+                            const neighbor = allVertices[neighborIdx];
+                            const dx = neighbor.x - v.x;
+                            const dy = neighbor.y - v.y;
+                            const dz = neighbor.z - v.z;
+                            const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                            if (len > 0.001) {
+                                edgeT = Math.sqrt((cx-v.x)**2 + (cy-v.y)**2 + (cz-v.z)**2) / len;
+                            }
+                        }
+                    }
+                    
                     particleBaseData.push({
                         // Constellation position (organized)
                         cx, cy, cz,
                         // Scattered position (random/organic)
                         sx, sy, sz,
+                        // Source vertex index for skeletal animation
+                        vertexIndex: i,
+                        neighborIndex: neighborIdx,
+                        edgeT: edgeT,
                         seed1: Math.random() * Math.PI * 2,
                         seed2: Math.random() * Math.PI * 2,
                         driftX: (Math.random() - 0.5) * 2,
@@ -962,6 +1419,10 @@
                     particleBaseData.push({
                         cx, cy, cz,
                         sx, sy, sz,
+                        // Volume particles don't follow skeleton (interior)
+                        vertexIndex: -1,
+                        neighborIndex: -1,
+                        edgeT: 0,
                         seed1: Math.random() * Math.PI * 2,
                         seed2: Math.random() * Math.PI * 2,
                         driftX: (Math.random() - 0.5) * 2,
@@ -996,6 +1457,19 @@
             const sizes = new Float32Array(count);
             const seeds = new Float32Array(count * 4);
             const drifts = new Float32Array(count * 3);
+            
+            // Compute actual Z bounds from particles
+            particleBounds = { minZ: Infinity, maxZ: -Infinity };
+            for (let i = 0; i < count; i++) {
+                const p = particleBaseData[i];
+                particleBounds.minZ = Math.min(particleBounds.minZ, p.cz);
+                particleBounds.maxZ = Math.max(particleBounds.maxZ, p.cz);
+            }
+            // Fallback if bounds computation failed
+            if (!isFinite(particleBounds.minZ) || !isFinite(particleBounds.maxZ)) {
+                particleBounds = { minZ: -1, maxZ: 1 };
+            }
+            console.log('Particle Z bounds:', particleBounds);
             
             for (let i = 0; i < count; i++) {
                 const p = particleBaseData[i];
@@ -1047,6 +1521,7 @@
                     reference: { value: settings.reference === 'camera' ? 1 : 0 },
                     cameraDir: { value: new THREE.Vector3(0, 0, -1) },
                     cameraPos: { value: new THREE.Vector3(0, 0, 3) },
+                    modelBoundsZ: { value: new THREE.Vector2(particleBounds.minZ, particleBounds.maxZ) },
                     surfaceFloat: { value: settings.surfaceFloat / 100 },
                     surfaceSpeed: { value: settings.surfaceSpeed / 100 },
                     assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
@@ -1083,6 +1558,7 @@
                     uniform int reference;
                     uniform vec3 cameraDir;
                     uniform vec3 cameraPos;
+                    uniform vec2 modelBoundsZ;
                     uniform float surfaceFloat;
                     uniform float surfaceSpeed;
                     uniform float assemblyProgress;
@@ -1463,6 +1939,102 @@
             document.getElementById('status').textContent = `${count.toLocaleString()} particles`;
         }
         
+        // Update particles to follow skinned mesh skeleton
+        const _tempVec = new THREE.Vector3();
+        const _tempVec2 = new THREE.Vector3();
+        
+        let skeletonUpdateCount = 0;
+        function updateParticlesFromSkeleton() {
+            if (!skinnedMesh || !pointsMesh || !skeletonNormParams) {
+                if (skeletonUpdateCount === 0) console.log('Skeleton update skipped:', { skinnedMesh: !!skinnedMesh, pointsMesh: !!pointsMesh, skeletonNormParams: !!skeletonNormParams });
+                return;
+            }
+            if (!skinnedMesh.skeleton || !skinnedMesh.applyBoneTransform) {
+                if (skeletonUpdateCount === 0) console.log('No skeleton or applyBoneTransform:', { skeleton: !!skinnedMesh.skeleton, applyBoneTransform: !!skinnedMesh.applyBoneTransform });
+                return;
+            }
+            
+            const meshGeom = skinnedMesh.geometry;
+            const meshPositions = meshGeom.attributes.position;
+            if (!meshPositions) {
+                if (skeletonUpdateCount === 0) console.log('No mesh positions');
+                return;
+            }
+            
+            if (skeletonUpdateCount === 0) console.log('Updating particles from skeleton...');
+            
+            const geometry = pointsMesh.geometry;
+            const positions = geometry.attributes.constellationPosition;
+            const scatteredPositions = geometry.attributes.scatteredPosition;
+            if (!positions || !scatteredPositions) return;
+            
+            const { cx, cy, cz, scale } = skeletonNormParams;
+            
+            for (let i = 0; i < particleBaseData.length; i++) {
+                const p = particleBaseData[i];
+                const vi = p.vertexIndex;
+                if (vi === undefined || vi < 0) continue;
+                
+                // Get original vertex position from mesh geometry
+                _tempVec.fromBufferAttribute(meshPositions, vi);
+                
+                // Apply bone transformation (modifies _tempVec in place)
+                skinnedMesh.applyBoneTransform(vi, _tempVec);
+                
+                // Apply normalization (same as when we loaded the model)
+                let px = (_tempVec.x - cx) * scale;
+                let py = (_tempVec.y - cy) * scale;
+                let pz = (_tempVec.z - cz) * scale;
+                
+                // If this particle interpolates along an edge, blend with neighbor
+                if (p.neighborIndex >= 0 && p.edgeT > 0) {
+                    _tempVec2.fromBufferAttribute(meshPositions, p.neighborIndex);
+                    skinnedMesh.applyBoneTransform(p.neighborIndex, _tempVec2);
+                    const nx = (_tempVec2.x - cx) * scale;
+                    const ny = (_tempVec2.y - cy) * scale;
+                    const nz = (_tempVec2.z - cz) * scale;
+                    
+                    px = px + (nx - px) * p.edgeT;
+                    py = py + (ny - py) * p.edgeT;
+                    pz = pz + (nz - pz) * p.edgeT;
+                }
+                
+                // Update constellation position
+                positions.setXYZ(i, px, py, pz);
+                
+                // Update scattered position (offset from animated position)
+                // Keep the relative offset from original
+                const ox = p.sx - p.cx;
+                const oy = p.sy - p.cy;
+                const oz = p.sz - p.cz;
+                scatteredPositions.setXYZ(i, px + ox, py + oy, pz + oz);
+            }
+            
+            positions.needsUpdate = true;
+            scatteredPositions.needsUpdate = true;
+            skeletonUpdateCount++;
+            if (skeletonUpdateCount === 1) {
+                console.log('First skeleton update complete, particles:', particleBaseData.length);
+                // Debug: log first few particle positions
+                console.log('Sample positions after transform:');
+                for (let j = 0; j < Math.min(5, particleBaseData.length); j++) {
+                    console.log(`  Particle ${j}: pos=(${positions.getX(j).toFixed(3)}, ${positions.getY(j).toFixed(3)}, ${positions.getZ(j).toFixed(3)})`);
+                }
+                console.log('Normalization params used:', { cx, cy, cz, scale });
+                // Debug: show raw mesh position vs bone-transformed
+                if (skinnedMesh && skinnedMesh.geometry.attributes.position) {
+                    const meshPos = skinnedMesh.geometry.attributes.position;
+                    console.log('Mesh positions vs bone-transformed (first 3):');
+                    for (let j = 0; j < 3; j++) {
+                        const rawX = meshPos.getX(j), rawY = meshPos.getY(j), rawZ = meshPos.getZ(j);
+                        const testVec = new THREE.Vector3(rawX, rawY, rawZ);
+                        skinnedMesh.applyBoneTransform(j, testVec);
+                        console.log(`  Vertex ${j}: raw=(${rawX.toFixed(3)}, ${rawY.toFixed(3)}, ${rawZ.toFixed(3)}) -> bone=(${testVec.x.toFixed(3)}, ${testVec.y.toFixed(3)}, ${testVec.z.toFixed(3)})`);
+                    }
+                }
+            }
+        }
+        
         // Assembly/Disassembly functions
         // Assembly state
         let targetAssemblyProgress = 1.0;
@@ -1488,7 +2060,18 @@
         // Animation
         function animate() {
             requestAnimationFrame(animate);
-            time += 0.016;
+            const delta = clock.getDelta();
+            time += delta;
+            
+            // Update animation mixer for skinned mesh
+            if (mixer) {
+                mixer.update(delta);
+                
+                // Update particle positions to follow skeleton
+                if (skinnedMesh && pointsMesh && particleBaseData.length > 0) {
+                    updateParticlesFromSkeleton();
+                }
+            }
             
             if (pointsMesh) {
                 const uniforms = pointsMesh.material.uniforms;

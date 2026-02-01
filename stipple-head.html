@@ -27,10 +27,6 @@
         }
         
         .toggle-btn {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            z-index: 20;
             background: rgba(0,0,0,0.7);
             border: 1px solid rgba(255,255,255,0.2);
             color: #fff;
@@ -41,6 +37,23 @@
         }
         .toggle-btn:hover {
             background: rgba(50,50,80,0.9);
+        }
+        
+        #toggleBtn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 20;
+        }
+        
+        .assembly-controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 20;
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
         }
         
         .controls {
@@ -140,7 +153,7 @@
     
     <button class="toggle-btn" id="toggleBtn">⚙️ Settings</button>
     
-    <div class="assembly-controls" style="position: fixed; top: 10px; left: 10px; z-index: 20; display: flex; gap: 8px;">
+    <div class="assembly-controls">
         <button class="toggle-btn" id="disassembleBtn">💨 Disassemble</button>
         <button class="toggle-btn" id="assembleBtn">🧲 Assemble</button>
         <button class="toggle-btn" id="animateBtn">🎭 Animate</button>
@@ -500,6 +513,7 @@
         
         let currentModel = 'walt';
         const loader = new OBJLoader();
+        let vertexEdges = []; // For each vertex, list of neighbor vertex indices
         
         function loadModel(modelName) {
             currentModel = modelName;
@@ -512,9 +526,14 @@
                 document.getElementById('status').textContent = 'Processing...';
                 
                 let vertices = [];
+                let edges = new Map(); // vertexIdx -> Set of neighbor indices
+                
                 obj.traverse((child) => {
                     if (child.isMesh && child.geometry) {
                         const positions = child.geometry.attributes.position;
+                        const vertexOffset = vertices.length;
+                        
+                        // Collect vertices
                         for (let i = 0; i < positions.count; i++) {
                             vertices.push({
                                 x: positions.getX(i),
@@ -522,8 +541,47 @@
                                 z: positions.getZ(i)
                             });
                         }
+                        
+                        // Extract edges from faces
+                        const index = child.geometry.index;
+                        if (index) {
+                            // Indexed geometry - every 3 indices form a triangle
+                            for (let i = 0; i < index.count; i += 3) {
+                                const a = vertexOffset + index.getX(i);
+                                const b = vertexOffset + index.getX(i + 1);
+                                const c = vertexOffset + index.getX(i + 2);
+                                
+                                // Add edges for this triangle
+                                if (!edges.has(a)) edges.set(a, new Set());
+                                if (!edges.has(b)) edges.set(b, new Set());
+                                if (!edges.has(c)) edges.set(c, new Set());
+                                edges.get(a).add(b); edges.get(a).add(c);
+                                edges.get(b).add(a); edges.get(b).add(c);
+                                edges.get(c).add(a); edges.get(c).add(b);
+                            }
+                        } else {
+                            // Non-indexed - every 3 vertices form a triangle
+                            for (let i = 0; i < positions.count; i += 3) {
+                                const a = vertexOffset + i;
+                                const b = vertexOffset + i + 1;
+                                const c = vertexOffset + i + 2;
+                                
+                                if (!edges.has(a)) edges.set(a, new Set());
+                                if (!edges.has(b)) edges.set(b, new Set());
+                                if (!edges.has(c)) edges.set(c, new Set());
+                                edges.get(a).add(b); edges.get(a).add(c);
+                                edges.get(b).add(a); edges.get(b).add(c);
+                                edges.get(c).add(a); edges.get(c).add(b);
+                            }
+                        }
                     }
                 });
+                
+                // Convert edge map to array for fast lookup
+                vertexEdges = [];
+                for (let i = 0; i < vertices.length; i++) {
+                    vertexEdges.push(edges.has(i) ? Array.from(edges.get(i)) : []);
+                }
                 
                 // Normalize and CENTER at origin
                 const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
@@ -627,37 +685,18 @@
                     const v = allVertices[i];
                     let x = v.x, y = v.y, z = v.z;
                     
-                    // For oversampled passes, create constellation by putting particles on edges
-                    if (pass > 0) {
-                        // Find 3 closest neighbors ONCE per vertex (deterministic based on index)
-                        // Then pick one of them for this particle
-                        const sampleSize = 100;
-                        const maxDistSq = 0.09;
-                        const neighbors = [];
+                    // For oversampled passes, place particles along actual mesh edges
+                    if (pass > 0 && vertexEdges[i] && vertexEdges[i].length > 0) {
+                        // Pick a random edge neighbor (actual mesh edge)
+                        const neighbors = vertexEdges[i];
+                        const neighborIdx = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        const neighbor = allVertices[neighborIdx];
                         
-                        // Find several close neighbors
-                        for (let s = 0; s < sampleSize && neighbors.length < 5; s++) {
-                            // Use vertex index to get consistent sampling
-                            const sampleIdx = (i * 7 + s * 13) % allVertices.length;
-                            if (sampleIdx === i) continue;
-                            const n = allVertices[sampleIdx];
-                            
-                            const dx = n.x - v.x, dy = n.y - v.y, dz = n.z - v.z;
-                            const distSq = dx*dx + dy*dy + dz*dz;
-                            
-                            if (distSq > 0.0001 && distSq < maxDistSq) {
-                                neighbors.push(n);
-                            }
-                        }
-                        
-                        if (neighbors.length > 0) {
-                            // Pick one of the found neighbors randomly
-                            const neighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
-                            const t = Math.random(); // Full edge
-                            x = v.x + (neighbor.x - v.x) * t;
-                            y = v.y + (neighbor.y - v.y) * t;
-                            z = v.z + (neighbor.z - v.z) * t;
-                        }
+                        // Interpolate along the edge (constellation effect)
+                        const t = Math.random();
+                        x = v.x + (neighbor.x - v.x) * t;
+                        y = v.y + (neighbor.y - v.y) * t;
+                        z = v.z + (neighbor.z - v.z) * t;
                     }
                     
                     particleBaseData.push({

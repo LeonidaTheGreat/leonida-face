@@ -371,6 +371,17 @@
         // Animation blending
         let lastBlendTime = 0;
         let nextBlendTime = 0;
+        let animationQueue = [];
+        let currentMood = 'idle'; // idle, alert, expressive
+        
+        // Animation categories for smarter blending
+        const animCategories = {
+            idle: ['Idle_03', 'Idle_12', 'Idle_13', 'Idle_3', 'Idle_4', 'Idle_6', 'Idle_7', 'Idle_9'],
+            breathe: ['Long_Breathe_and_Look_Around', 'Short_Breathe_and_Look_Around'],
+            lookAround: ['Look_Around_Dumbfounded', 'Alert'],
+            expressive: ['Agree_Gesture', 'Angry_Ground_Stomp_1'],
+            movement: ['Walking', 'Running']
+        };
 
         // === LOAD MODEL ===
         const loader = new GLTFLoader();
@@ -444,13 +455,42 @@
         function blendToRandomIdle() {
             if (idleAnimations.length < 2) return;
             
-            // Pick a different animation
-            let next;
-            do {
-                next = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-            } while (currentAction && next.name === currentAction.getClip().name && idleAnimations.length > 1);
+            // Smart animation selection based on patterns
+            const roll = Math.random();
+            let category, choices;
             
-            playAnimation(next, 1.0); // Longer fade for smooth blend
+            if (roll < 0.6) {
+                // 60% chance: regular idle
+                category = 'idle';
+            } else if (roll < 0.8) {
+                // 20% chance: breathing/looking
+                category = Math.random() < 0.5 ? 'breathe' : 'lookAround';
+            } else {
+                // 20% chance: expressive gesture
+                category = 'expressive';
+            }
+            
+            // Find animations matching category
+            choices = animations.filter(a => {
+                const name = a.name;
+                const patterns = animCategories[category] || animCategories.idle;
+                return patterns.some(p => name.includes(p));
+            });
+            
+            if (choices.length === 0) choices = idleAnimations;
+            
+            // Pick one that's different from current
+            let next;
+            let attempts = 0;
+            do {
+                next = choices[Math.floor(Math.random() * choices.length)];
+                attempts++;
+            } while (currentAction && next.name === currentAction.getClip().name && choices.length > 1 && attempts < 10);
+            
+            playAnimation(next, 1.2); // Smooth crossfade
+            
+            // Update info
+            document.getElementById('animInfo').textContent = `Playing: ${next.name} (${category})`;
         }
 
         // === PARTICLES ===
@@ -702,7 +742,9 @@
             // Auto-blend idle animations
             if (settings.autoBlend && isAssembled && time > nextBlendTime) {
                 blendToRandomIdle();
-                nextBlendTime = time + settings.blendInterval + Math.random() * 4;
+                // Vary interval for more natural feel
+                const variation = settings.blendInterval * 0.5;
+                nextBlendTime = time + settings.blendInterval + (Math.random() - 0.5) * variation * 2;
             }
             
             // Update particles

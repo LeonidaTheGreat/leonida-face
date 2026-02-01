@@ -1248,16 +1248,16 @@
             
             // Auto-zoom camera to frame head + upper torso
             // Head is at origin. Frame from head down to ~30% of body height below.
-            const modelHeight = normBounds.maxY - normBounds.minY;
-            const modelWidth = normBounds.maxX - normBounds.minX;
+            const normHeight = normBounds.maxY - normBounds.minY;
+            const normWidth = normBounds.maxX - normBounds.minX;
             
             // Target slightly below head center to show upper torso
             const targetY = Math.min(0, normBounds.minY * 0.3); // 30% down toward body
             
             // Calculate camera distance to frame head + upper torso
             // Frame about 40% of model height (head + shoulders)
-            const frameHeight = modelHeight * 0.4;
-            const frameWidth = Math.max(modelWidth, frameHeight * 0.8); // Ensure width fits
+            const frameHeight = normHeight * 0.4;
+            const frameWidth = Math.max(normWidth, frameHeight * 0.8); // Ensure width fits
             
             // Use FOV to calculate required distance
             const fov = camera.fov * Math.PI / 180;

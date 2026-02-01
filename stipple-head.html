@@ -627,16 +627,36 @@
                     const v = allVertices[i];
                     let x = v.x, y = v.y, z = v.z;
                     
-                    // For oversampled passes, interpolate with nearby vertex
+                    // For oversampled passes, interpolate along surface edges only
                     if (pass > 0) {
-                        const offset = Math.floor(Math.random() * searchRange) - Math.floor(searchRange / 2);
-                        const neighborIdx = Math.max(0, Math.min(allVertices.length - 1, i + offset));
-                        const neighbor = allVertices[neighborIdx];
+                        // Search wider but only accept vertices that are close in 3D
+                        const wideSearchRange = Math.floor(allVertices.length * 0.1); // 10% of mesh
+                        const maxEdgeDist = 0.12; // Max distance for true surface neighbors
+                        let neighbor = null;
                         
-                        const t = Math.random() * 0.5;
-                        x = v.x + (neighbor.x - v.x) * t;
-                        y = v.y + (neighbor.y - v.y) * t;
-                        z = v.z + (neighbor.z - v.z) * t;
+                        // Try to find a close neighbor
+                        for (let attempt = 0; attempt < 20; attempt++) {
+                            const offset = Math.floor(Math.random() * wideSearchRange) - Math.floor(wideSearchRange / 2);
+                            if (offset === 0) continue;
+                            const neighborIdx = Math.max(0, Math.min(allVertices.length - 1, i + offset));
+                            const n = allVertices[neighborIdx];
+                            
+                            const dx = n.x - v.x, dy = n.y - v.y, dz = n.z - v.z;
+                            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                            
+                            if (dist > 0.001 && dist < maxEdgeDist) {
+                                neighbor = n;
+                                break;
+                            }
+                        }
+                        
+                        if (neighbor) {
+                            const t = Math.random(); // Full interpolation along edge
+                            x = v.x + (neighbor.x - v.x) * t;
+                            y = v.y + (neighbor.y - v.y) * t;
+                            z = v.z + (neighbor.z - v.z) * t;
+                        }
+                        // No close neighbor = stay at vertex (won't create interior point)
                     }
                     
                     particleBaseData.push({

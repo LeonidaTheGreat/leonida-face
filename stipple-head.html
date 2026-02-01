@@ -169,6 +169,7 @@
                 <option value="female">Female (Full Body)</option>
                 <option value="male">Male (Full Body)</option>
                 <option value="leonida">Leonida (Animated)</option>
+                <option value="leonida_male">⚖️ Leonida + Male (Compare)</option>
                 <optgroup label="─── Meshy Characters ───">
                     <option value="wanderer">Timeless Wanderer</option>
                     <option value="gothic">Gothic Character</option>
@@ -673,6 +674,7 @@
             female: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/female02/female02.obj',
             male: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/male02/male02.obj',
             leonida: 'models/meshy_merged_animations.glb',
+            'leonida_male': 'COMPARISON', // Special: side-by-side comparison
             // Meshy AI characters (textured, no rig)
             wanderer: 'models/Timeless_Wanderer.glb',
             gothic: 'models/Gothic_Character.glb',
@@ -778,6 +780,12 @@
         let vertexEdges = []; // For each vertex, list of neighbor vertex indices
         
         function loadModel(modelName) {
+            // Handle comparison mode
+            if (modelName === 'leonida_male') {
+                loadComparisonMode();
+                return;
+            }
+            
             currentModel = modelName;
             document.getElementById('status').textContent = 'Loading model...';
             
@@ -1187,6 +1195,115 @@
             document.getElementById('status').textContent = `Loaded: ${vertices.length} vertices`;
             
             // Auto-play handled in GLTF loader
+        }
+        
+        // Comparison mode: load Male and Leonida side by side
+        async function loadComparisonMode() {
+            document.getElementById('status').textContent = 'Loading comparison...';
+            
+            // Clear previous state
+            if (mixer) { mixer.stopAllAction(); mixer = null; }
+            if (window.gltfScene) { scene.remove(window.gltfScene); window.gltfScene = null; }
+            skinnedMesh = null;
+            animationClips = [];
+            document.getElementById('animationRow').style.display = 'none';
+            document.getElementById('showMeshRow').style.display = 'none';
+            
+            const HEAD_TARGET = 2.0;
+            const SPACING = 3; // Space between models
+            
+            // Load Male (OBJ)
+            const maleVertices = await new Promise((resolve) => {
+                loader.load(modelUrls.male, (obj) => {
+                    let verts = [];
+                    obj.traverse((child) => {
+                        if (child.isMesh && child.geometry) {
+                            const pos = child.geometry.attributes.position;
+                            for (let i = 0; i < pos.count; i++) {
+                                verts.push({ x: pos.getX(i), y: pos.getY(i), z: pos.getZ(i) });
+                            }
+                        }
+                    });
+                    resolve(verts);
+                });
+            });
+            
+            // Load Leonida (GLB) - just get bind pose vertices
+            const leonidaVertices = await new Promise((resolve) => {
+                gltfLoader.load(modelUrls.leonida, (gltf) => {
+                    let verts = [];
+                    gltf.scene.traverse((child) => {
+                        if (child.isMesh && child.geometry) {
+                            const pos = child.geometry.attributes.position;
+                            for (let i = 0; i < pos.count; i++) {
+                                verts.push({ x: pos.getX(i), y: pos.getY(i), z: pos.getZ(i) });
+                            }
+                        }
+                    });
+                    resolve(verts);
+                });
+            });
+            
+            // Normalize Male
+            const maleBounds = getBounds(maleVertices);
+            const maleHeadY = maleBounds.maxY - (maleBounds.maxY - maleBounds.minY) * 0.15;
+            const maleHeadBounds = getBounds(maleVertices.filter(v => v.y >= maleHeadY));
+            const maleHeadSize = Math.max(maleHeadBounds.maxX - maleHeadBounds.minX, maleHeadBounds.maxY - maleHeadBounds.minY, maleHeadBounds.maxZ - maleHeadBounds.minZ);
+            const maleScale = HEAD_TARGET / maleHeadSize;
+            const maleCx = (maleHeadBounds.minX + maleHeadBounds.maxX) / 2;
+            const maleCy = (maleHeadBounds.minY + maleHeadBounds.maxY) / 2;
+            const maleCz = (maleHeadBounds.minZ + maleHeadBounds.maxZ) / 2;
+            
+            // Normalize Leonida
+            const leonidaBounds = getBounds(leonidaVertices);
+            const leonidaHeadY = leonidaBounds.maxY - (leonidaBounds.maxY - leonidaBounds.minY) * 0.15;
+            const leonidaHeadBounds = getBounds(leonidaVertices.filter(v => v.y >= leonidaHeadY));
+            const leonidaHeadSize = Math.max(leonidaHeadBounds.maxX - leonidaHeadBounds.minX, leonidaHeadBounds.maxY - leonidaHeadBounds.minY, leonidaHeadBounds.maxZ - leonidaHeadBounds.minZ);
+            const leonidaScale = HEAD_TARGET / leonidaHeadSize;
+            const leonidaCx = (leonidaHeadBounds.minX + leonidaHeadBounds.maxX) / 2;
+            const leonidaCy = (leonidaHeadBounds.minY + leonidaHeadBounds.maxY) / 2;
+            const leonidaCz = (leonidaHeadBounds.minZ + leonidaHeadBounds.maxZ) / 2;
+            
+            console.log(`Male: headSize=${maleHeadSize.toFixed(2)}, scale=${maleScale.toFixed(4)}`);
+            console.log(`Leonida: headSize=${leonidaHeadSize.toFixed(2)}, scale=${leonidaScale.toFixed(4)}`);
+            
+            // Combine vertices with X offset
+            allVertices = [];
+            maleVertices.forEach(v => {
+                allVertices.push({
+                    x: (v.x - maleCx) * maleScale - SPACING,
+                    y: (v.y - maleCy) * maleScale,
+                    z: (v.z - maleCz) * maleScale
+                });
+            });
+            leonidaVertices.forEach(v => {
+                allVertices.push({
+                    x: (v.x - leonidaCx) * leonidaScale + SPACING,
+                    y: (v.y - leonidaCy) * leonidaScale,
+                    z: (v.z - leonidaCz) * leonidaScale
+                });
+            });
+            
+            // Build empty edges (no constellation for comparison)
+            vertexEdges = allVertices.map(() => []);
+            
+            // Move camera back
+            camera.position.set(0, 0, 10);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            
+            initParticles();
+            document.getElementById('status').textContent = `Comparison: Male (${maleVertices.length}) + Leonida (${leonidaVertices.length})`;
+        }
+        
+        function getBounds(verts) {
+            const b = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+            verts.forEach(v => {
+                b.minX = Math.min(b.minX, v.x); b.maxX = Math.max(b.maxX, v.x);
+                b.minY = Math.min(b.minY, v.y); b.maxY = Math.max(b.maxY, v.y);
+                b.minZ = Math.min(b.minZ, v.z); b.maxZ = Math.max(b.maxZ, v.z);
+            });
+            return b;
         }
         
         // Animation selection handler with crossfade blending

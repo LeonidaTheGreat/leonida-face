@@ -1706,22 +1706,38 @@
                         pos += radial * floatZ * 0.3; // Tiny bit of in/out breathing
                         
                         // === Depth calculation for dissipation ===
-                        // Use linear Z-based depth, normalized to model bounds
-                        // This ensures "X% from front" means the same for all models
+                        // Camera-relative AND normalized to model bounds
                         float depth;
                         if (reference == 1) {
-                            // Camera reference - linear Z normalized to model bounds
-                            // depth = 0 at back (minZ), depth = 1 at front (maxZ)
-                            float modelDepth = modelBoundsZ.y - modelBoundsZ.x;
-                            if (modelDepth > 0.001) {
-                                depth = (basePosition.z - modelBoundsZ.x) / modelDepth;
+                            // Camera reference: project position onto camera direction
+                            // Then normalize to model's depth range
+                            vec3 worldBasePos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
+                            
+                            // Project onto camera direction (distance along camera axis)
+                            float projectedDepth = dot(worldBasePos, -cameraDir);
+                            
+                            // Model bounds projected onto camera axis
+                            // For model at origin, minZ projects to minZ, maxZ to maxZ (when camera at +Z)
+                            float projectedMin = modelBoundsZ.x; // back of model
+                            float projectedMax = modelBoundsZ.y; // front of model
+                            float depthRange = projectedMax - projectedMin;
+                            
+                            if (depthRange > 0.001) {
+                                // Normalize: 0 = back, 1 = front
+                                depth = (projectedDepth - projectedMin) / depthRange;
                             } else {
                                 depth = 0.5;
                             }
                             depth = clamp(depth, 0.0, 1.0);
                         } else {
-                            // Model reference - use local space (legacy)
-                            depth = (basePosition.z + 1.0) / 2.0;
+                            // Model reference - use local Z space
+                            float depthRange = modelBoundsZ.y - modelBoundsZ.x;
+                            if (depthRange > 0.001) {
+                                depth = (basePosition.z - modelBoundsZ.x) / depthRange;
+                            } else {
+                                depth = 0.5;
+                            }
+                            depth = clamp(depth, 0.0, 1.0);
                         }
                         
                         // effectStart: portion of front unaffected (0-1 scale from %)

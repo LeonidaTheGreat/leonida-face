@@ -627,34 +627,36 @@
                     const v = allVertices[i];
                     let x = v.x, y = v.y, z = v.z;
                     
-                    // For oversampled passes, find neighbor for constellation effect
+                    // For oversampled passes, create constellation by putting particles on edges
                     if (pass > 0) {
+                        // Find 3 closest neighbors ONCE per vertex (deterministic based on index)
+                        // Then pick one of them for this particle
                         const sampleSize = 100;
-                        const maxDistSq = 0.09; // ~0.3 units max distance
-                        let closestNeighbor = null;
-                        let closestDist = Infinity;
+                        const maxDistSq = 0.09;
+                        const neighbors = [];
                         
-                        // Sample random vertices to find closest neighbor
-                        for (let s = 0; s < sampleSize; s++) {
-                            const randomIdx = Math.floor(Math.random() * allVertices.length);
-                            if (randomIdx === i) continue;
-                            const n = allVertices[randomIdx];
+                        // Find several close neighbors
+                        for (let s = 0; s < sampleSize && neighbors.length < 5; s++) {
+                            // Use vertex index to get consistent sampling
+                            const sampleIdx = (i * 7 + s * 13) % allVertices.length;
+                            if (sampleIdx === i) continue;
+                            const n = allVertices[sampleIdx];
                             
                             const dx = n.x - v.x, dy = n.y - v.y, dz = n.z - v.z;
                             const distSq = dx*dx + dy*dy + dz*dz;
                             
-                            if (distSq > 0.0001 && distSq < maxDistSq && distSq < closestDist) {
-                                closestDist = distSq;
-                                closestNeighbor = n;
+                            if (distSq > 0.0001 && distSq < maxDistSq) {
+                                neighbors.push(n);
                             }
                         }
                         
-                        if (closestNeighbor) {
-                            // Distribute along edge - bias toward middle for constellation lines
-                            const t = 0.1 + Math.random() * 0.8; // 0.1 to 0.9 (avoid endpoints)
-                            x = v.x + (closestNeighbor.x - v.x) * t;
-                            y = v.y + (closestNeighbor.y - v.y) * t;
-                            z = v.z + (closestNeighbor.z - v.z) * t;
+                        if (neighbors.length > 0) {
+                            // Pick one of the found neighbors randomly
+                            const neighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
+                            const t = Math.random(); // Full edge
+                            x = v.x + (neighbor.x - v.x) * t;
+                            y = v.y + (neighbor.y - v.y) * t;
+                            z = v.z + (neighbor.z - v.z) * t;
                         }
                     }
                     

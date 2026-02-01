@@ -180,12 +180,10 @@
             </div>
         </div>
         
-        <!-- Scatter disabled - was breaking constellation
         <div class="slider-row">
             <label>Scatter (0=constellation, 100=spread)</label>
             <input type="range" id="scatter" min="0" max="100" value="0">
         </div>
-        -->
         
         <div class="slider-row">
             <label>Interior Fill (adds particles inside)</label>
@@ -431,7 +429,7 @@
             document.getElementById('densityMin').value = settings.densityMin;
             document.getElementById('densityMax').value = settings.densityMax;
             
-            // document.getElementById('scatter').value = settings.scatter;
+            document.getElementById('scatter').value = settings.scatter;
             document.getElementById('volumeDensity').value = settings.volumeDensity;
             document.getElementById('volumeDensity').min = settings.volumeDensityMin;
             document.getElementById('volumeDensity').max = settings.volumeDensityMax;
@@ -617,12 +615,8 @@
             particleBaseData = [];
             
             // === SURFACE PARTICLES ===
-            // Density controls how many particles
-            // Scatter: 0 = constellation (edges), 100 = even surface coverage
             const passes = Math.ceil(densityFactor);
             const lastPassChance = densityFactor - Math.floor(densityFactor);
-            // Scatter feature disabled for now - was breaking constellation
-            // const scatterAmount = settings.scatter / 100;
             
             // Search range scales with mesh size (2% of vertices = good locality)
             const searchRange = Math.max(10, Math.floor(allVertices.length * 0.02));
@@ -636,15 +630,14 @@
                     const v = allVertices[i];
                     let x = v.x, y = v.y, z = v.z;
                     
-                    // For oversampled passes, interpolate with a nearby vertex
-                    // This spreads particles across the surface, not off it
+                    // For oversampled passes, distribute particles
                     if (pass > 0) {
-                        // Pick a random nearby vertex (within ~2% of total vertices for locality)
+                        // Pick a nearby vertex (locality preserves mesh structure)
                         const offset = Math.floor(Math.random() * searchRange) - Math.floor(searchRange / 2);
                         const neighborIdx = Math.max(0, Math.min(allVertices.length - 1, i + offset));
                         const neighbor = allVertices[neighborIdx];
                         
-                        // Interpolate between current vertex and neighbor
+                        // Interpolate between current vertex and neighbor (stay on surface)
                         const t = Math.random() * 0.5; // 0-50% toward neighbor
                         x = v.x + (neighbor.x - v.x) * t;
                         y = v.y + (neighbor.y - v.y) * t;
@@ -656,8 +649,8 @@
                         seed1: Math.random() * Math.PI * 2,
                         seed2: Math.random() * Math.PI * 2,
                         driftX: (Math.random() - 0.5) * 2,
-                        driftY: (Math.random() - 0.3),
-                        driftZ: -Math.random(),
+                        driftY: (Math.random() - 0.5) * 2,
+                        driftZ: (Math.random() - 0.5) * 2,
                         speed: 0.3 + Math.random() * 0.4,
                         sizeVar: 0.7 + Math.random() * 0.6
                     });
@@ -687,8 +680,8 @@
                         seed1: Math.random() * Math.PI * 2,
                         seed2: Math.random() * Math.PI * 2,
                         driftX: (Math.random() - 0.5) * 2,
-                        driftY: (Math.random() - 0.3),
-                        driftZ: -Math.random(),
+                        driftY: (Math.random() - 0.5) * 2,
+                        driftZ: (Math.random() - 0.5) * 2,
                         speed: 0.3 + Math.random() * 0.4,
                         sizeVar: 0.5 + Math.random() * 0.5 // Slightly smaller for interior
                     });
@@ -840,7 +833,22 @@
                         float floatAmount = falloff * floatAway;
                         float anim = sin(time * seeds.z + seeds.x) * 0.5 + 0.5;
                         
-                        pos += drift * floatAmount * (0.5 + anim * 0.5);
+                        // Away from camera = direction camera is looking
+                        vec3 awayDir = cameraDir;
+                        
+                        // First: filter out toward-camera component from drift
+                        vec3 filteredDrift = drift;
+                        vec3 towardCamera = -cameraDir;
+                        float towardComponent = dot(drift, towardCamera);
+                        if (towardComponent > 0.0) {
+                            filteredDrift -= towardCamera * towardComponent;
+                        }
+                        
+                        // floatDir: 0 = random (but never toward camera), 1 = directly away
+                        float driftMag = length(drift);
+                        vec3 floatDirection = mix(filteredDrift, awayDir * driftMag, floatDir);
+                        
+                        pos += floatDirection * floatAmount * (0.5 + anim * 0.5);
                         pos.y += sin(time * 0.5 + seeds.y) * 0.03 * falloff;
                         
                         // Alpha based on dissipation
@@ -1030,7 +1038,7 @@
             settings.density = parseFloat(document.getElementById('density').value);
             settings.densityMin = parseFloat(document.getElementById('densityMin').value);
             settings.densityMax = parseFloat(document.getElementById('densityMax').value);
-            // settings.scatter = parseFloat(document.getElementById('scatter').value);
+            settings.scatter = parseFloat(document.getElementById('scatter').value);
             settings.volumeDensity = parseFloat(document.getElementById('volumeDensity').value);
             settings.volumeDensityMin = parseFloat(document.getElementById('volumeDensityMin').value);
             settings.volumeDensityMax = parseFloat(document.getElementById('volumeDensityMax').value);
@@ -1099,11 +1107,10 @@
         setupSlider('density', 'density', true, false);
         
         // Scatter slider (rebuilds particles)
-        // Scatter disabled - was breaking constellation
-        // document.getElementById('scatter').addEventListener('input', (e) => {
-        //     settings.scatter = parseFloat(e.target.value);
-        //     initParticles();
-        // });
+        document.getElementById('scatter').addEventListener('input', (e) => {
+            settings.scatter = parseFloat(e.target.value);
+            initParticles();
+        });
         
         setupSlider('volumeDensity', 'volumeDensity', true, false);
         setupSlider('effectStart', 'effectStart', false, true);

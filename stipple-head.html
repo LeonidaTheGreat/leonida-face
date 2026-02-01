@@ -507,6 +507,10 @@
         let headAnimationEnabled = false;
         let modelGroup = null; // Container for model rotation
         
+        // Walt reference system: Walt is the baseline for all positioning
+        // Other models are translated (not scaled) to match Walt's position relative to Effect Start
+        let waltReference = null; // { headY, minZ, maxZ, depth } - set when Walt loads
+        
         // Default settings
         const defaultSettings = {
             size: 0.1,
@@ -1090,7 +1094,16 @@
                 console.log(`Head only: size=${headSize.toFixed(2)}`);
             }
             
-            scale = HEAD_TARGET_SIZE / headSize;
+            // Calculate natural scale (head-based)
+            const naturalScale = HEAD_TARGET_SIZE / headSize;
+            
+            // Use Walt's scale for non-Walt models (no scaling up = consistent particle density)
+            if (modelName !== 'walt' && waltReference) {
+                scale = waltReference.scale;
+                console.log(`Using Walt's scale (${scale.toFixed(4)}) instead of model's natural scale (${naturalScale.toFixed(4)})`);
+            } else {
+                scale = naturalScale;
+            }
             
             allVertices = vertices.map(v => ({
                 x: (v.x - cx) * scale,
@@ -1167,7 +1180,16 @@
                     headSize = Math.max(skelWidth, skelHeight, skelDepth);
                 }
                 
-                scale = HEAD_TARGET_SIZE / headSize;
+                // Calculate natural scale for skeleton
+                const skelNaturalScale = HEAD_TARGET_SIZE / headSize;
+                
+                // Use Walt's scale for non-Walt models (consistent particle density)
+                if (modelName !== 'walt' && waltReference) {
+                    scale = waltReference.scale;
+                    console.log(`Skeleton using Walt's scale (${scale.toFixed(4)}) instead of natural (${skelNaturalScale.toFixed(4)})`);
+                } else {
+                    scale = skelNaturalScale;
+                }
                 console.log('Skeleton normalization:', { cx, cy, cz, scale });
             }
             
@@ -1175,6 +1197,49 @@
             skeletonNormParams = { cx, cy, cz, scale };
             window._debug = { skeletonNormParams, bounds };
             console.log('Final skeletonNormParams:', skeletonNormParams);
+            
+            // === WALT REFERENCE SYSTEM ===
+            // Walt is the baseline. Store his bounds when he loads.
+            // Other models get positioned to match Walt's Z distances (no scaling up).
+            
+            // Compute normalized bounds from allVertices
+            const normBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+            allVertices.forEach(v => {
+                normBounds.minX = Math.min(normBounds.minX, v.x); normBounds.maxX = Math.max(normBounds.maxX, v.x);
+                normBounds.minY = Math.min(normBounds.minY, v.y); normBounds.maxY = Math.max(normBounds.maxY, v.y);
+                normBounds.minZ = Math.min(normBounds.minZ, v.z); normBounds.maxZ = Math.max(normBounds.maxZ, v.z);
+            });
+            
+            if (modelName === 'walt') {
+                // Walt is the reference - store his bounds
+                waltReference = {
+                    scale: scale,
+                    minZ: normBounds.minZ,
+                    maxZ: normBounds.maxZ,
+                    depth: normBounds.maxZ - normBounds.minZ,
+                    headCenterY: 0 // Walt's head is centered at origin
+                };
+                console.log('Walt reference stored:', waltReference);
+            } else if (waltReference) {
+                // Non-Walt model: translate Z to match Walt's bounds
+                // Don't re-scale, just shift so front/back match Walt's
+                const modelDepth = normBounds.maxZ - normBounds.minZ;
+                const modelCenterZ = (normBounds.minZ + normBounds.maxZ) / 2;
+                const waltCenterZ = (waltReference.minZ + waltReference.maxZ) / 2;
+                const zOffset = waltCenterZ - modelCenterZ;
+                
+                console.log(`Adjusting ${modelName} Z: modelDepth=${modelDepth.toFixed(3)}, waltDepth=${waltReference.depth.toFixed(3)}, zOffset=${zOffset.toFixed(3)}`);
+                
+                // Apply Z translation to all vertices
+                allVertices = allVertices.map(v => ({
+                    x: v.x,
+                    y: v.y,
+                    z: v.z + zOffset
+                }));
+                
+                // Update skeletonNormParams to include Z offset for skeleton animation
+                skeletonNormParams.zOffset = zOffset;
+            }
             
             // Camera always at z=3, target origin (head is centered there)
             camera.position.set(0, 0, 3);
@@ -1968,7 +2033,8 @@
             const scatteredPositions = geometry.attributes.scatteredPosition;
             if (!positions || !scatteredPositions) return;
             
-            const { cx, cy, cz, scale } = skeletonNormParams;
+            const { cx, cy, cz, scale, zOffset } = skeletonNormParams;
+            const zOff = zOffset || 0; // Walt reference Z offset (0 for Walt himself)
             
             for (let i = 0; i < particleBaseData.length; i++) {
                 const p = particleBaseData[i];
@@ -1984,7 +2050,7 @@
                 // Apply normalization (same as when we loaded the model)
                 let px = (_tempVec.x - cx) * scale;
                 let py = (_tempVec.y - cy) * scale;
-                let pz = (_tempVec.z - cz) * scale;
+                let pz = (_tempVec.z - cz) * scale + zOff; // Apply Walt reference Z offset
                 
                 // If this particle interpolates along an edge, blend with neighbor
                 if (p.neighborIndex >= 0 && p.edgeT > 0) {
@@ -1992,7 +2058,7 @@
                     skinnedMesh.applyBoneTransform(p.neighborIndex, _tempVec2);
                     const nx = (_tempVec2.x - cx) * scale;
                     const ny = (_tempVec2.y - cy) * scale;
-                    const nz = (_tempVec2.z - cz) * scale;
+                    const nz = (_tempVec2.z - cz) * scale + zOff; // Apply Walt reference Z offset
                     
                     px = px + (nx - px) * p.edgeT;
                     py = py + (ny - py) * p.edgeT;
@@ -2020,7 +2086,7 @@
                 for (let j = 0; j < Math.min(5, particleBaseData.length); j++) {
                     console.log(`  Particle ${j}: pos=(${positions.getX(j).toFixed(3)}, ${positions.getY(j).toFixed(3)}, ${positions.getZ(j).toFixed(3)})`);
                 }
-                console.log('Normalization params used:', { cx, cy, cz, scale });
+                console.log('Normalization params used:', { cx, cy, cz, scale, zOffset: zOff });
                 // Debug: show raw mesh position vs bone-transformed
                 if (skinnedMesh && skinnedMesh.geometry.attributes.position) {
                     const meshPos = skinnedMesh.geometry.attributes.position;

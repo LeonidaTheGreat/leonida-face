@@ -507,10 +507,6 @@
         let headAnimationEnabled = false;
         let modelGroup = null; // Container for model rotation
         
-        // Walt reference system: Walt is the baseline for all positioning
-        // Other models are translated (not scaled) to match Walt's position relative to Effect Start
-        let waltReference = null; // { headY, minZ, maxZ, depth } - set when Walt loads
-        
         // Default settings
         const defaultSettings = {
             size: 0.1,
@@ -1044,9 +1040,9 @@
                 bounds.minZ = Math.min(bounds.minZ, v.z); bounds.maxZ = Math.max(bounds.maxZ, v.z);
             });
             
-            // Get model config (not to be confused with global settings)
-            const modelConfig = modelSettings[modelName] || { headOnly: false };
-            const isHeadOnly = modelConfig.headOnly;
+            // Get model settings
+            const settings = modelSettings[modelName] || { headOnly: false };
+            const isHeadOnly = settings.headOnly;
             
             const modelWidth = bounds.maxX - bounds.minX;
             const modelHeight = bounds.maxY - bounds.minY;
@@ -1094,7 +1090,6 @@
                 console.log(`Head only: size=${headSize.toFixed(2)}`);
             }
             
-            // Each model uses its own natural scale (no cross-model scaling)
             scale = HEAD_TARGET_SIZE / headSize;
             
             allVertices = vertices.map(v => ({
@@ -1172,7 +1167,6 @@
                     headSize = Math.max(skelWidth, skelHeight, skelDepth);
                 }
                 
-                // Each model uses its own natural scale (no cross-model scaling)
                 scale = HEAD_TARGET_SIZE / headSize;
                 console.log('Skeleton normalization:', { cx, cy, cz, scale });
             }
@@ -1182,68 +1176,10 @@
             window._debug = { skeletonNormParams, bounds };
             console.log('Final skeletonNormParams:', skeletonNormParams);
             
-            // === WALT REFERENCE SYSTEM ===
-            // Walt is the baseline. Store his bounds when he loads.
-            // Other models get positioned to match Walt's Z distances (no scaling up).
-            
-            // Compute normalized bounds from allVertices
-            const normBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
-            allVertices.forEach(v => {
-                normBounds.minX = Math.min(normBounds.minX, v.x); normBounds.maxX = Math.max(normBounds.maxX, v.x);
-                normBounds.minY = Math.min(normBounds.minY, v.y); normBounds.maxY = Math.max(normBounds.maxY, v.y);
-                normBounds.minZ = Math.min(normBounds.minZ, v.z); normBounds.maxZ = Math.max(normBounds.maxZ, v.z);
-            });
-            
-            if (modelName === 'walt') {
-                // Walt is the reference - store his bounds relative to Effect Start
-                // Effect Start plane is at: maxZ - effectStart% * depth
-                // Head is at origin (0,0,0). Store head's distance from front (maxZ).
-                waltReference = {
-                    scale: scale,
-                    minZ: normBounds.minZ,
-                    maxZ: normBounds.maxZ,
-                    depth: normBounds.maxZ - normBounds.minZ,
-                    // Head is at Z=0, so head-to-front distance is maxZ
-                    headToFront: normBounds.maxZ,
-                    headToBack: -normBounds.minZ
-                };
-                console.log('Walt reference stored:', waltReference);
-                console.log(`Walt position: center=(0,0,0), bounds X=[${normBounds.minX.toFixed(3)}, ${normBounds.maxX.toFixed(3)}], Y=[${normBounds.minY.toFixed(3)}, ${normBounds.maxY.toFixed(3)}], Z=[${normBounds.minZ.toFixed(3)}, ${normBounds.maxZ.toFixed(3)}]`);
-            } else if (waltReference) {
-                // Non-Walt model: translate so head has same distance to front as Walt's head
-                // This ensures Effect Start plane cuts at same relative position to head
-                const modelMaxZ = normBounds.maxZ;
-                const modelHeadToFront = modelMaxZ; // Head is at Z=0
-                
-                // Offset so this model's headToFront matches Walt's headToFront
-                const zOffset = waltReference.headToFront - modelHeadToFront;
-                
-                console.log(`Adjusting ${modelName} Z: headToFront=${modelHeadToFront.toFixed(3)}, waltHeadToFront=${waltReference.headToFront.toFixed(3)}, zOffset=${zOffset.toFixed(3)}`);
-                console.log(`${modelName} BEFORE offset: bounds X=[${normBounds.minX.toFixed(3)}, ${normBounds.maxX.toFixed(3)}], Y=[${normBounds.minY.toFixed(3)}, ${normBounds.maxY.toFixed(3)}], Z=[${normBounds.minZ.toFixed(3)}, ${normBounds.maxZ.toFixed(3)}]`);
-                
-                // Apply Z translation to all vertices
-                allVertices = allVertices.map(v => ({
-                    x: v.x,
-                    y: v.y,
-                    z: v.z + zOffset
-                }));
-                
-                // Update skeletonNormParams to include Z offset for skeleton animation
-                skeletonNormParams.zOffset = zOffset;
-            }
-            
-            // Camera at z=3, target origin (head is centered there)
+            // Camera always at z=3, target origin (head is centered there)
             camera.position.set(0, 0, 3);
             controls.target.set(0, 0, 0);
             controls.update();
-            
-            // Apply same transformation to GLTF scene (for debug mesh)
-            if (window.gltfScene && skeletonNormParams) {
-                const { cx, cy, cz, scale, zOffset } = skeletonNormParams;
-                window.gltfScene.position.set(-cx * scale, -cy * scale, -cz * scale + (zOffset || 0));
-                window.gltfScene.scale.set(scale, scale, scale);
-                console.log(`GLTF scene transform: pos=(${window.gltfScene.position.x.toFixed(3)}, ${window.gltfScene.position.y.toFixed(3)}, ${window.gltfScene.position.z.toFixed(3)}), scale=${scale.toFixed(4)}`);
-            }
             
             applySettingsToUI();
             initParticles();
@@ -1680,32 +1616,23 @@
                         pos += radial * floatZ * 0.3; // Tiny bit of in/out breathing
                         
                         // === Depth calculation for dissipation ===
-                        // Camera-relative AND normalized to model bounds
+                        // Normalize depth to model bounds so "X% from front" is consistent
                         float depth;
+                        float depthRange = modelBoundsZ.y - modelBoundsZ.x;
+                        
                         if (reference == 1) {
-                            // Camera reference: project position onto camera direction
-                            // Then normalize to model's depth range
+                            // Camera reference - project onto camera axis, normalize to model bounds
                             vec3 worldBasePos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
-                            
-                            // Project onto camera direction (distance along camera axis)
                             float projectedDepth = dot(worldBasePos, -cameraDir);
                             
-                            // Model bounds projected onto camera axis
-                            // For model at origin, minZ projects to minZ, maxZ to maxZ (when camera at +Z)
-                            float projectedMin = modelBoundsZ.x; // back of model
-                            float projectedMax = modelBoundsZ.y; // front of model
-                            float depthRange = projectedMax - projectedMin;
-                            
                             if (depthRange > 0.001) {
-                                // Normalize: 0 = back, 1 = front
-                                depth = (projectedDepth - projectedMin) / depthRange;
+                                depth = (projectedDepth - modelBoundsZ.x) / depthRange;
                             } else {
                                 depth = 0.5;
                             }
                             depth = clamp(depth, 0.0, 1.0);
                         } else {
-                            // Model reference - use local Z space
-                            float depthRange = modelBoundsZ.y - modelBoundsZ.x;
+                            // Model reference - use local Z, normalized to model bounds
                             if (depthRange > 0.001) {
                                 depth = (basePosition.z - modelBoundsZ.x) / depthRange;
                             } else {
@@ -2052,8 +1979,7 @@
             const scatteredPositions = geometry.attributes.scatteredPosition;
             if (!positions || !scatteredPositions) return;
             
-            const { cx, cy, cz, scale, zOffset } = skeletonNormParams;
-            const zOff = zOffset || 0; // Walt reference Z offset (0 for Walt himself)
+            const { cx, cy, cz, scale } = skeletonNormParams;
             
             for (let i = 0; i < particleBaseData.length; i++) {
                 const p = particleBaseData[i];
@@ -2069,7 +1995,7 @@
                 // Apply normalization (same as when we loaded the model)
                 let px = (_tempVec.x - cx) * scale;
                 let py = (_tempVec.y - cy) * scale;
-                let pz = (_tempVec.z - cz) * scale + zOff; // Apply Walt reference Z offset
+                let pz = (_tempVec.z - cz) * scale;
                 
                 // If this particle interpolates along an edge, blend with neighbor
                 if (p.neighborIndex >= 0 && p.edgeT > 0) {
@@ -2077,7 +2003,7 @@
                     skinnedMesh.applyBoneTransform(p.neighborIndex, _tempVec2);
                     const nx = (_tempVec2.x - cx) * scale;
                     const ny = (_tempVec2.y - cy) * scale;
-                    const nz = (_tempVec2.z - cz) * scale + zOff; // Apply Walt reference Z offset
+                    const nz = (_tempVec2.z - cz) * scale;
                     
                     px = px + (nx - px) * p.edgeT;
                     py = py + (ny - py) * p.edgeT;
@@ -2105,7 +2031,7 @@
                 for (let j = 0; j < Math.min(5, particleBaseData.length); j++) {
                     console.log(`  Particle ${j}: pos=(${positions.getX(j).toFixed(3)}, ${positions.getY(j).toFixed(3)}, ${positions.getZ(j).toFixed(3)})`);
                 }
-                console.log('Normalization params used:', { cx, cy, cz, scale, zOffset: zOff });
+                console.log('Normalization params used:', { cx, cy, cz, scale });
                 // Debug: show raw mesh position vs bone-transformed
                 if (skinnedMesh && skinnedMesh.geometry.attributes.position) {
                     const meshPos = skinnedMesh.geometry.attributes.position;

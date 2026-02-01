@@ -1075,16 +1075,18 @@
                     cz = (bounds.minZ + bounds.maxZ) / 2;
                     headSize = Math.max(modelWidth, modelHeight, modelDepth);
                 } else {
-                    cx = (headBounds.minX + headBounds.maxX) / 2;
-                    cy = (headBounds.minY + headBounds.maxY) / 2;
-                    cz = (headBounds.minZ + headBounds.maxZ) / 2;
+                    // X and Z: use MODEL center (so rotation axis goes through body center)
+                    // Y: use HEAD center (so heads align at Y=0)
+                    cx = (bounds.minX + bounds.maxX) / 2;  // Model center X
+                    cy = (headBounds.minY + headBounds.maxY) / 2;  // Head center Y
+                    cz = (bounds.minZ + bounds.maxZ) / 2;  // Model center Z
                     headSize = Math.max(
                         headBounds.maxX - headBounds.minX,
                         headBounds.maxY - headBounds.minY,
                         headBounds.maxZ - headBounds.minZ
                     );
                 }
-                console.log(`Full body: headThreshold=${headThreshold.toFixed(2)}, headSize=${headSize.toFixed(2)}`);
+                console.log(`Full body: headThreshold=${headThreshold.toFixed(2)}, headSize=${headSize.toFixed(2)}, cx=${cx.toFixed(2)}, cy=${cy.toFixed(2)}, cz=${cz.toFixed(2)}`);
             } else {
                 // Head-only: use full bounds
                 cx = (bounds.minX + bounds.maxX) / 2;
@@ -1163,9 +1165,11 @@
                         cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
                         headSize = Math.max(skelWidth, skelHeight, skelDepth);
                     } else {
-                        cx = (headBounds.minX + headBounds.maxX) / 2;
-                        cy = (headBounds.minY + headBounds.maxY) / 2;
-                        cz = (headBounds.minZ + headBounds.maxZ) / 2;
+                        // X and Z: use SKELETON center (so rotation axis goes through body center)
+                        // Y: use HEAD center (so heads align at Y=0)
+                        cx = (skelBounds.minX + skelBounds.maxX) / 2;  // Skeleton center X
+                        cy = (headBounds.minY + headBounds.maxY) / 2;  // Head center Y
+                        cz = (skelBounds.minZ + skelBounds.maxZ) / 2;  // Skeleton center Z
                         headSize = Math.max(
                             headBounds.maxX - headBounds.minX,
                             headBounds.maxY - headBounds.minY,

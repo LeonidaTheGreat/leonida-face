@@ -1,0 +1,2661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leonida - Stipple Head</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #fff;
+        }
+        #container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        .status {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8em;
+            color: rgba(100, 150, 255, 0.5);
+            letter-spacing: 0.1em;
+            z-index: 10;
+        }
+        
+        .toggle-btn {
+            background: rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+        .toggle-btn:hover {
+            background: rgba(50,50,80,0.9);
+        }
+        
+        #toggleBtn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 20;
+        }
+        
+        .assembly-controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 20;
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 45px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+            background: rgba(0,0,0,0.85);
+            padding: 12px;
+            border-radius: 8px;
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+            width: 250px;
+            font-size: 0.7em;
+        }
+        .controls.hidden {
+            display: none;
+        }
+        .controls h3 {
+            font-size: 0.85em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.4);
+            margin-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 8px;
+        }
+        .controls h3:first-child {
+            margin-top: 0;
+            border-top: none;
+            padding-top: 0;
+        }
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            margin-bottom: 6px;
+        }
+        .slider-row label {
+            color: rgba(255,255,255,0.7);
+        }
+        .slider-row input[type="range"] {
+            width: 100%;
+        }
+        .range-inputs {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .range-inputs input[type="number"] {
+            width: 55px;
+            padding: 2px 4px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 3px;
+            color: #fff;
+            font-size: 0.9em;
+        }
+        .range-inputs span {
+            color: rgba(255,255,255,0.4);
+            font-size: 0.9em;
+        }
+        .controls select {
+            padding: 4px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.5);
+            color: #fff;
+            width: 100%;
+        }
+        .controls input[type="color"] {
+            width: 100%;
+            height: 25px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .save-btn {
+            margin-top: 10px;
+            padding: 8px;
+            background: rgba(100,150,255,0.3);
+            border: 1px solid rgba(100,150,255,0.5);
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .save-btn:hover {
+            background: rgba(100,150,255,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    <div class="status" id="status">Loading model...</div>
+    
+    <button class="toggle-btn" id="toggleBtn">⚙️ Settings</button>
+    
+    <div class="assembly-controls">
+        <button class="toggle-btn" id="disassembleBtn">💨 Disassemble</button>
+        <button class="toggle-btn" id="assembleBtn">🧲 Assemble</button>
+        <button class="toggle-btn" id="animateBtn">🎭 Animate</button>
+    </div>
+    
+    <div class="controls" id="controls">
+        <h3>Model</h3>
+        
+        <div class="slider-row">
+            <label>Select Model</label>
+            <select id="modelSelect">
+                <option value="walt">Walt Head</option>
+                <option value="female">Female (Full Body)</option>
+                <option value="male">Male (Full Body)</option>
+                <option value="leonida">Leonida (Animated)</option>
+                <option value="leonida_simple">Leonida Simplified (30%)</option>
+                <option value="leonida_male">⚖️ Leonida + Male (Compare)</option>
+                <optgroup label="─── Meshy Characters ───">
+                    <option value="wanderer">Timeless Wanderer</option>
+                    <option value="gothic">Gothic Character</option>
+                    <option value="explorer">Explorer Pose</option>
+                    <option value="survivor">Post-Apocalyptic Survivor</option>
+                </optgroup>
+                <optgroup label="─── Rigged Bipeds ───">
+                    <option value="biped1">Biped 1 (Animated)</option>
+                    <option value="biped2_run">Biped 2 - Running</option>
+                    <option value="biped2_walk">Biped 2 - Walking</option>
+                    <option value="biped3">Biped 3 (Animated)</option>
+                    <option value="biped4">Biped 4 (Animated)</option>
+                    <option value="biped5">Biped 5 (Animated)</option>
+                    <option value="biped6">Biped 6 (Animated)</option>
+                </optgroup>
+            </select>
+        </div>
+        
+        <div class="slider-row" id="animationRow" style="display: none;">
+            <label>Animation</label>
+            <select id="animationSelect">
+                <option value="">-- None --</option>
+            </select>
+        </div>
+        
+        <div class="slider-row" id="showMeshRow" style="display: none;">
+            <label>
+                <input type="checkbox" id="showMesh"> Show Mesh (debug)
+            </label>
+        </div>
+        
+        <h3>Particles</h3>
+        
+        <div class="slider-row">
+            <label>Size</label>
+            <input type="range" id="size" min="0.05" max="1" value="0.1" step="0.01">
+            <div class="range-inputs">
+                <input type="number" id="sizeMin" value="0.05" step="0.01"> 
+                <span>-</span>
+                <input type="number" id="sizeMax" value="1" step="0.1">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Density</label>
+            <input type="range" id="density" min="1" max="200" value="90">
+            <div class="range-inputs">
+                <input type="number" id="densityMin" value="1"> 
+                <span>-</span>
+                <input type="number" id="densityMax" value="200">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Scatter (organized → organic)</label>
+            <input type="range" id="scatter" min="0" max="100" value="0">
+        </div>
+        
+        <div class="slider-row">
+            <label>Interior Fill (adds particles inside)</label>
+            <input type="range" id="volumeDensity" min="0" max="100" value="0">
+            <div class="range-inputs">
+                <input type="number" id="volumeDensityMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="volumeDensityMax" value="100">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Shape</label>
+            <select id="shape">
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+                <option value="soft" selected>Soft Circle</option>
+            </select>
+        </div>
+        
+        <h3>Dissipation</h3>
+        
+        <div class="slider-row">
+            <label>Reference Point</label>
+            <select id="reference">
+                <option value="model">Model (face = front)</option>
+                <option value="camera" selected>Camera (facing = front)</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Effect Start (% from front unaffected)</label>
+            <input type="range" id="effectStart" min="0" max="200" value="90">
+            <div class="range-inputs">
+                <input type="number" id="effectStartMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="effectStartMax" value="200">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Density Falloff</label>
+            <input type="range" id="dissipation" min="0" max="1000" value="200">
+            <div class="range-inputs">
+                <input type="number" id="dissipationMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="dissipationMax" value="1000">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Falloff Curve</label>
+            <select id="falloffCurve">
+                <option value="linear">Linear</option>
+                <option value="quadratic" selected>Quadratic</option>
+                <option value="cubic">Cubic</option>
+                <option value="exponential">Exponential</option>
+                <option value="logarithmic">Logarithmic</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Float Away Distance</label>
+            <input type="range" id="floatAway" min="0" max="1000" value="200">
+            <div class="range-inputs">
+                <input type="number" id="floatAwayMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="floatAwayMax" value="1000">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Float Direction (0=random, 100=away from camera)</label>
+            <input type="range" id="floatDir" min="0" max="100" value="50">
+        </div>
+        
+        <h3>Surface Animation</h3>
+        
+        <div class="slider-row">
+            <label>Surface Float Distance</label>
+            <input type="range" id="surfaceFloat" min="0" max="100" value="15">
+            <div class="range-inputs">
+                <input type="number" id="surfaceFloatMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="surfaceFloatMax" value="100">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Surface Float Speed</label>
+            <input type="range" id="surfaceSpeed" min="0" max="200" value="50">
+            <div class="range-inputs">
+                <input type="number" id="surfaceSpeedMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="surfaceSpeedMax" value="200">
+            </div>
+        </div>
+        
+        <h3>Assembly Animation</h3>
+        
+        <div class="slider-row">
+            <label>Fly Direction</label>
+            <select id="assemblyDirection">
+                <option value="back">Back (away from camera)</option>
+                <option value="above">Above</option>
+                <option value="below">Below</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Direction Spread (perpendicular scatter)</label>
+            <input type="range" id="assemblySpread" min="0" max="100" value="20">
+        </div>
+        
+        <div class="slider-row">
+            <label>Direction Randomness (per-particle chaos)</label>
+            <input type="range" id="assemblyDirRandom" min="0" max="100" value="0">
+        </div>
+        
+        <div class="slider-row">
+            <label>Turbulence (swirl during motion)</label>
+            <input type="range" id="assemblyTurbulence" min="0" max="100" value="0">
+        </div>
+        
+        <div class="slider-row">
+            <label>Closer Particles Delay</label>
+            <input type="range" id="assemblyBackDelay" min="0" max="100" value="0">
+        </div>
+        
+        <div class="slider-row">
+            <label>Further Particles Delay</label>
+            <input type="range" id="assemblyFrontDelay" min="0" max="100" value="60">
+        </div>
+        
+        <div class="slider-row">
+            <label>Random Timing Spread</label>
+            <input type="range" id="assemblyRandomTime" min="0" max="100" value="30">
+        </div>
+        
+        <div class="slider-row">
+            <label>Fade Out (% of particle duration)</label>
+            <input type="range" id="assemblyFalloff" min="0" max="100" value="80">
+        </div>
+        
+        <div class="slider-row">
+            <label>Fade Easing</label>
+            <select id="assemblyFadeEasing">
+                <option value="linear">Linear</option>
+                <option value="ease-in">Ease In (slow start)</option>
+                <option value="ease-out" selected>Ease Out (slow end)</option>
+                <option value="ease-in-out">Ease In-Out</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Particle Duration (seconds)</label>
+            <input type="range" id="assemblyDuration" min="0.5" max="10" value="3" step="0.5">
+        </div>
+        
+        <div class="slider-row">
+            <label>Duration Spread (%)</label>
+            <input type="range" id="assemblyDurationSpread" min="0" max="100" value="50">
+        </div>
+        
+        <div class="slider-row">
+            <label>Easing Mode</label>
+            <select id="assemblyEasing">
+                <option value="uniform">Uniform (Smooth)</option>
+                <option value="random-type">Random Type (linear/ease-in/ease-out/bounce)</option>
+                <option value="random-intensity">Random Intensity</option>
+                <option value="random-overshoot">Random with Overshoot</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Bounce Particles (%)</label>
+            <input type="range" id="assemblyBouncePercent" min="0" max="100" value="20">
+        </div>
+        
+        <div class="slider-row">
+            <label>Bounce Strength</label>
+            <input type="range" id="assemblyBounceStrength" min="0" max="100" value="30">
+        </div>
+        
+        <div class="slider-row">
+            <label>Fly Distance</label>
+            <input type="range" id="assemblyDistance" min="1" max="100" value="30">
+            <div class="range-inputs">
+                <input type="number" id="assemblyDistanceMin" value="1"> 
+                <span>-</span>
+                <input type="number" id="assemblyDistanceMax" value="100">
+            </div>
+        </div>
+        
+        <h3>Appearance</h3>
+        
+        <div class="slider-row">
+            <label>Color</label>
+            <input type="color" id="color" value="#00ffff">
+        </div>
+        
+        <div class="slider-row">
+            <label>Glow</label>
+            <input type="range" id="glow" min="0" max="1000" value="150">
+            <div class="range-inputs">
+                <input type="number" id="glowMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="glowMax" value="1000">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Background</label>
+            <select id="background">
+                <option value="dark" selected>Dark</option>
+                <option value="light">Light</option>
+            </select>
+        </div>
+        
+        <button class="save-btn" id="saveBtn">💾 Save as Defaults</button>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        
+        console.log('Script loaded!');
+        
+        // Scene
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 3);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+        
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5, 0.4, 0.85
+        );
+        composer.addPass(bloomPass);
+        
+        // Controls - target at model center (0,0,0)
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 0, 0); // Center of model
+        controls.update();
+        
+        // State
+        let time = 0;
+        let pointsMesh = null;
+        let allVertices = [];
+        let particleBaseData = [];
+        let skeletonNormParams = null;
+        let isAssembled = true;
+        // GPU Skinning state
+        let gpuSkinningEnabled = false;
+        // Assembly state managed by shader uniform now
+        let headAnimationEnabled = false;
+        let modelGroup = null; // Container for model rotation
+        
+        // Default settings
+        const defaultSettings = {
+            size: 0.1,
+            sizeMin: 0.05,
+            sizeMax: 1,
+            density: 689,
+            densityMin: 1,
+            densityMax: 1000,
+            scatter: 0,
+            volumeDensity: 0,
+            volumeDensityMin: 0,
+            volumeDensityMax: 100,
+            shape: 'soft',
+            reference: 'camera',
+            effectStart: 19,
+            effectStartMin: 0,
+            effectStartMax: 200,
+            dissipation: 149,
+            dissipationMin: 0,
+            dissipationMax: 1000,
+            falloffCurve: 'cubic',
+            floatAway: 2000,
+            floatAwayMin: 0,
+            floatAwayMax: 2000,
+            floatDir: 73,
+            surfaceFloat: 3,
+            surfaceFloatMin: 0,
+            surfaceFloatMax: 100,
+            surfaceSpeed: 55,
+            surfaceSpeedMin: 0,
+            surfaceSpeedMax: 200,
+            color: '#178efd',
+            glow: 65,
+            glowMin: 0,
+            glowMax: 1000,
+            background: 'dark',
+            assemblyDirection: 'back',
+            assemblySpread: 0,
+            assemblyDirRandom: 19,
+            assemblyTurbulence: 40,
+            assemblyBackDelay: 20,
+            assemblyFrontDelay: 0,
+            assemblyRandomTime: 89,
+            assemblyFalloff: 80,
+            assemblyFadeEasing: 'ease-in',
+            assemblyDuration: 3,
+            assemblyDurationSpread: 94,
+            assemblyEasing: 'random-type',
+            assemblyBouncePercent: 89,
+            assemblyBounceStrength: 48,
+            assemblyDistance: 100,
+            assemblyDistanceMin: 1,
+            assemblyDistanceMax: 100
+        };
+        
+        // Load saved settings or use defaults
+        let settings = { ...defaultSettings };
+        const saved = localStorage.getItem('stippleHeadSettings');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                settings = { ...defaultSettings, ...parsed };
+            } catch (e) {}
+        }
+        window.settings = settings; // Expose for debugging (after localStorage load)
+        
+        // Apply settings to UI
+        function applySettingsToUI() {
+            // Set min/max BEFORE value (otherwise value gets clamped)
+            document.getElementById('size').min = settings.sizeMin;
+            document.getElementById('size').max = settings.sizeMax;
+            document.getElementById('size').value = settings.size;
+            document.getElementById('sizeMin').value = settings.sizeMin;
+            document.getElementById('sizeMax').value = settings.sizeMax;
+            
+            document.getElementById('density').min = settings.densityMin;
+            document.getElementById('density').max = settings.densityMax;
+            document.getElementById('density').value = settings.density;
+            document.getElementById('densityMin').value = settings.densityMin;
+            document.getElementById('densityMax').value = settings.densityMax;
+            
+            document.getElementById('scatter').value = settings.scatter;
+            document.getElementById('volumeDensity').min = settings.volumeDensityMin;
+            document.getElementById('volumeDensity').max = settings.volumeDensityMax;
+            document.getElementById('volumeDensity').value = settings.volumeDensity;
+            document.getElementById('volumeDensityMin').value = settings.volumeDensityMin;
+            document.getElementById('volumeDensityMax').value = settings.volumeDensityMax;
+            
+            document.getElementById('shape').value = settings.shape;
+            document.getElementById('reference').value = settings.reference;
+            
+            document.getElementById('effectStart').min = settings.effectStartMin;
+            document.getElementById('effectStart').max = settings.effectStartMax;
+            document.getElementById('effectStart').value = settings.effectStart;
+            document.getElementById('effectStartMin').value = settings.effectStartMin;
+            document.getElementById('effectStartMax').value = settings.effectStartMax;
+            
+            document.getElementById('dissipation').min = settings.dissipationMin;
+            document.getElementById('dissipation').max = settings.dissipationMax;
+            document.getElementById('dissipation').value = settings.dissipation;
+            document.getElementById('dissipationMin').value = settings.dissipationMin;
+            document.getElementById('dissipationMax').value = settings.dissipationMax;
+            
+            document.getElementById('falloffCurve').value = settings.falloffCurve;
+            
+            document.getElementById('floatAway').min = settings.floatAwayMin;
+            document.getElementById('floatAway').max = settings.floatAwayMax;
+            document.getElementById('floatAway').value = settings.floatAway;
+            document.getElementById('floatAwayMin').value = settings.floatAwayMin;
+            document.getElementById('floatAwayMax').value = settings.floatAwayMax;
+            document.getElementById('floatDir').value = settings.floatDir;
+            
+            document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
+            document.getElementById('surfaceFloat').max = settings.surfaceFloatMax;
+            document.getElementById('surfaceFloat').value = settings.surfaceFloat;
+            document.getElementById('surfaceFloatMin').value = settings.surfaceFloatMin;
+            document.getElementById('surfaceFloatMax').value = settings.surfaceFloatMax;
+            
+            document.getElementById('surfaceSpeed').min = settings.surfaceSpeedMin;
+            document.getElementById('surfaceSpeed').max = settings.surfaceSpeedMax;
+            document.getElementById('surfaceSpeed').value = settings.surfaceSpeed;
+            document.getElementById('surfaceSpeedMin').value = settings.surfaceSpeedMin;
+            document.getElementById('surfaceSpeedMax').value = settings.surfaceSpeedMax;
+            
+            document.getElementById('color').value = settings.color;
+            
+            document.getElementById('glow').min = settings.glowMin;
+            document.getElementById('glow').max = settings.glowMax;
+            document.getElementById('glow').value = settings.glow;
+            document.getElementById('glowMin').value = settings.glowMin;
+            document.getElementById('glowMax').value = settings.glowMax;
+            
+            document.getElementById('background').value = settings.background;
+            scene.background = new THREE.Color(settings.background === 'dark' ? 0x1a1a2e : 0xf5f5f5);
+            
+            // Assembly settings
+            document.getElementById('assemblyDirection').value = settings.assemblyDirection;
+            document.getElementById('assemblySpread').value = settings.assemblySpread;
+            document.getElementById('assemblyDirRandom').value = settings.assemblyDirRandom;
+            document.getElementById('assemblyTurbulence').value = settings.assemblyTurbulence;
+            document.getElementById('assemblyBackDelay').value = settings.assemblyBackDelay;
+            document.getElementById('assemblyFrontDelay').value = settings.assemblyFrontDelay;
+            document.getElementById('assemblyRandomTime').value = settings.assemblyRandomTime;
+            document.getElementById('assemblyFalloff').value = settings.assemblyFalloff;
+            document.getElementById('assemblyFadeEasing').value = settings.assemblyFadeEasing;
+            document.getElementById('assemblyDuration').value = settings.assemblyDuration;
+            document.getElementById('assemblyDurationSpread').value = settings.assemblyDurationSpread;
+            document.getElementById('assemblyEasing').value = settings.assemblyEasing;
+            document.getElementById('assemblyBouncePercent').value = settings.assemblyBouncePercent;
+            document.getElementById('assemblyBounceStrength').value = settings.assemblyBounceStrength;
+            document.getElementById('assemblyDistance').min = settings.assemblyDistanceMin;
+            document.getElementById('assemblyDistance').max = settings.assemblyDistanceMax;
+            document.getElementById('assemblyDistance').value = settings.assemblyDistance;
+            document.getElementById('assemblyDistanceMin').value = settings.assemblyDistanceMin;
+            document.getElementById('assemblyDistanceMax').value = settings.assemblyDistanceMax;
+        }
+        
+        // Apply settings to UI on page load
+        applySettingsToUI();
+        
+        // Model URLs
+        const modelUrls = {
+            walt: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/walt/WaltHead.obj',
+            female: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/female02/female02.obj',
+            male: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/male02/male02.obj',
+            leonida: 'models/meshy_merged_animations.glb',
+            leonida_simple: 'models/meshy_simplified.glb',
+            'leonida_male': 'COMPARISON', // Special: side-by-side comparison
+            // Meshy AI characters (textured, no rig)
+            wanderer: 'models/Timeless_Wanderer.glb',
+            gothic: 'models/Gothic_Character.glb',
+            explorer: 'models/Explorer_Pose.glb',
+            survivor: 'models/Post_Apocalyptic_Survivor.glb',
+            // Rigged bipeds with animations
+            biped1: 'models/Biped1_Merged_Animations.glb',
+            biped2_run: 'models/Biped2_Running.glb',
+            biped2_walk: 'models/Biped2_Walking.glb',
+            biped3: 'models/Biped3_Merged_Animations.glb',
+            biped4: 'models/Biped4_Merged_Animations.glb',
+            biped5: 'models/Biped5_Merged_Animations.glb',
+            biped6: 'models/Biped6_Merged_Animations.glb'
+        };
+        
+        // Camera settings per model
+        const cameraSettings = {
+            walt: { z: 3, targetY: 0 },
+            female: { z: 3, targetY: 0 },
+            male: { z: 3, targetY: 0 },
+            leonida: { z: 3, targetY: 0 },
+            // Meshy characters - full body view
+            wanderer: { z: 5, targetY: 0.8 },
+            gothic: { z: 5, targetY: 0.8 },
+            explorer: { z: 5, targetY: 0.8 },
+            survivor: { z: 5, targetY: 0.8 },
+            // Rigged bipeds
+            biped1: { z: 4, targetY: 1.0 },
+            biped2_run: { z: 4, targetY: 1.0 },
+            biped2_walk: { z: 4, targetY: 1.0 },
+            biped3: { z: 4, targetY: 1.0 },
+            biped4: { z: 4, targetY: 1.0 },
+            biped5: { z: 4, targetY: 1.0 }
+        };
+        
+        // Model normalization: all models center on head, scale so head = 2 units
+        const HEAD_TARGET_SIZE = 2.0;
+        const HEAD_TOP_PERCENT = 0.15; // Top 15% of model height = head region
+        
+        // Model settings: headOnly=true means the model IS just a head
+        const modelSettings = {
+            walt: { headOnly: true },
+            female: { headOnly: false },
+            male: { headOnly: false },
+            leonida: { headOnly: false },
+            leonida_simple: { headOnly: false },
+            wanderer: { headOnly: false },
+            gothic: { headOnly: false },
+            explorer: { headOnly: false },
+            survivor: { headOnly: false },
+            biped1: { headOnly: false },
+            biped2_run: { headOnly: false },
+            biped2_walk: { headOnly: false },
+            biped3: { headOnly: false },
+            biped4: { headOnly: false },
+            biped5: { headOnly: false },
+            biped6: { headOnly: false }
+        };
+        
+        // Animation state
+        let mixer = null;
+        let currentAction = null;
+        let skinnedMesh = null;
+        let animationClips = [];
+        const gltfLoader = new GLTFLoader();
+        const clock = new THREE.Clock();
+        
+        // Shared animation library - loaded once, applied to compatible skeletons
+        let sharedAnimationClips = [];
+        let sharedAnimationsLoaded = false;
+        
+        // Load shared animations from library file
+        async function loadSharedAnimations() {
+            if (sharedAnimationsLoaded) return;
+            
+            try {
+                const gltf = await new Promise((resolve, reject) => {
+                    gltfLoader.load('models/meshy_merged_animations.glb', resolve, undefined, reject);
+                });
+                sharedAnimationClips = gltf.animations || [];
+                sharedAnimationsLoaded = true;
+                console.log(`Loaded ${sharedAnimationClips.length} shared animations from library`);
+            } catch (err) {
+                console.warn('Could not load shared animation library:', err);
+            }
+        }
+        
+        // Check if skeleton has compatible bone structure for retargeting
+        function isSkeletonCompatible(skeleton) {
+            if (!skeleton || !skeleton.bones) return false;
+            
+            // Check for standard humanoid bone names
+            const boneNames = skeleton.bones.map(b => b.name.toLowerCase());
+            const requiredBones = ['hips', 'spine', 'head'];
+            
+            return requiredBones.every(req => 
+                boneNames.some(name => name.includes(req))
+            );
+        }
+        
+        // Preload shared animations
+        loadSharedAnimations();
+        
+        let currentModel = 'walt';
+        const loader = new OBJLoader();
+        let vertexEdges = []; // For each vertex, list of neighbor vertex indices
+        
+        function loadModel(modelName) {
+            // Handle comparison mode
+            if (modelName === 'leonida_male') {
+                loadComparisonMode();
+                return;
+            }
+            
+            currentModel = modelName;
+            document.getElementById('status').textContent = 'Loading model...';
+            
+            // Clear previous animation state
+            if (mixer) {
+                mixer.stopAllAction();
+                mixer = null;
+            }
+            // Remove previous GLTF scene if any
+            if (window.gltfScene) {
+                scene.remove(window.gltfScene);
+                window.gltfScene = null;
+            }
+            skinnedMesh = null;
+            animationClips = [];
+            
+            // Hide/show animation controls
+            const animRow = document.getElementById('animationRow');
+            const animSelect = document.getElementById('animationSelect');
+            
+            const url = modelUrls[modelName];
+            if (!url) return;
+            
+            const isGLB = url.endsWith('.glb') || url.endsWith('.gltf');
+            
+            if (isGLB) {
+                // Load GLB/GLTF with animations
+                gltfLoader.load(url, (gltf) => {
+                    document.getElementById('status').textContent = 'Processing GLTF...';
+                    console.log('GLTF loaded:', gltf);
+                    
+                    // Store animations from the model
+                    let modelAnims = gltf.animations || [];
+                    console.log(`Found ${modelAnims.length} animations in model`);
+                    
+                    // Find skinned mesh first to check skeleton compatibility
+                    let tempSkinnedMesh = null;
+                    gltf.scene.traverse((child) => {
+                        if (child.isSkinnedMesh && !tempSkinnedMesh) {
+                            tempSkinnedMesh = child;
+                        }
+                    });
+                    
+                    // Merge with shared animations if skeleton is compatible
+                    if (tempSkinnedMesh && tempSkinnedMesh.skeleton && isSkeletonCompatible(tempSkinnedMesh.skeleton)) {
+                        // Get existing animation names to avoid duplicates
+                        const existingNames = new Set(modelAnims.map(a => a.name));
+                        
+                        // Add shared animations that don't already exist
+                        let addedCount = 0;
+                        sharedAnimationClips.forEach(clip => {
+                            if (!existingNames.has(clip.name)) {
+                                modelAnims.push(clip);
+                                addedCount++;
+                            }
+                        });
+                        
+                        if (addedCount > 0) {
+                            console.log(`Added ${addedCount} shared animations (skeleton compatible)`);
+                        }
+                    } else if (tempSkinnedMesh) {
+                        console.log('Skeleton not compatible with shared animations');
+                    }
+                    
+                    animationClips = modelAnims;
+                    
+                    // Populate animation dropdown and auto-play first animation
+                    if (animationClips.length > 0) {
+                        animRow.style.display = 'block';
+                        animSelect.innerHTML = '<option value="">-- None --</option>';
+                        animationClips.forEach((clip, idx) => {
+                            const opt = document.createElement('option');
+                            opt.value = idx;
+                            opt.textContent = clip.name || `Animation ${idx}`;
+                            animSelect.appendChild(opt);
+                        });
+                        
+                        // Auto-play will happen after mixer is created (see below)
+                    } else {
+                        animRow.style.display = 'none';
+                    }
+                    
+                    let vertices = [];
+                    let edges = new Map();
+                    
+                    gltf.scene.traverse((child) => {
+                        if (child.isSkinnedMesh) {
+                            skinnedMesh = child;
+                            console.log('Found SkinnedMesh:', child.name, 'applyBoneTransform:', typeof child.applyBoneTransform);
+                        }
+                        if (child.isMesh && child.geometry) {
+                            const positions = child.geometry.attributes.position;
+                            const vertexOffset = vertices.length;
+                            
+                            // For skinned mesh, we need world positions
+                            // First update the skeleton
+                            if (child.isSkinnedMesh && child.skeleton) {
+                                child.skeleton.update();
+                            }
+                            
+                            // Get positions (in local space for now)
+                            for (let i = 0; i < positions.count; i++) {
+                                vertices.push({
+                                    x: positions.getX(i),
+                                    y: positions.getY(i),
+                                    z: positions.getZ(i)
+                                });
+                            }
+                            
+                            // Extract edges from faces
+                            const index = child.geometry.index;
+                            if (index) {
+                                console.log(`Extracting edges from indexed geometry: ${index.count} indices`);
+                                for (let i = 0; i < index.count; i += 3) {
+                                    const a = vertexOffset + index.getX(i);
+                                    const b = vertexOffset + index.getX(i + 1);
+                                    const c = vertexOffset + index.getX(i + 2);
+                                    
+                                    if (!edges.has(a)) edges.set(a, new Set());
+                                    if (!edges.has(b)) edges.set(b, new Set());
+                                    if (!edges.has(c)) edges.set(c, new Set());
+                                    edges.get(a).add(b); edges.get(a).add(c);
+                                    edges.get(b).add(a); edges.get(b).add(c);
+                                    edges.get(c).add(a); edges.get(c).add(b);
+                                }
+                            } else {
+                                // Non-indexed geometry fallback
+                                console.log(`Extracting edges from non-indexed geometry: ${positions.count} vertices`);
+                                for (let i = 0; i < positions.count; i += 3) {
+                                    const a = vertexOffset + i;
+                                    const b = vertexOffset + i + 1;
+                                    const c = vertexOffset + i + 2;
+                                    
+                                    if (!edges.has(a)) edges.set(a, new Set());
+                                    if (!edges.has(b)) edges.set(b, new Set());
+                                    if (!edges.has(c)) edges.set(c, new Set());
+                                    edges.get(a).add(b); edges.get(a).add(c);
+                                    edges.get(b).add(a); edges.get(b).add(c);
+                                    edges.get(c).add(a); edges.get(c).add(b);
+                                }
+                            }
+                        }
+                    });
+                    
+                    console.log(`GLTF edge extraction complete: ${edges.size} vertices with edges`);
+                    
+                    // Create animation mixer and auto-play Idle
+                    if (skinnedMesh) {
+                        mixer = new THREE.AnimationMixer(gltf.scene);
+                        
+                        // Auto-play an Idle animation
+                        if (animationClips.length > 0) {
+                            let idleIdx = animationClips.findIndex(clip => 
+                                clip.name.toLowerCase().includes('idle')
+                            );
+                            if (idleIdx === -1) idleIdx = 0;
+                            document.getElementById('animationSelect').value = String(idleIdx);
+                            currentAction = mixer.clipAction(animationClips[idleIdx]);
+                            currentAction.play();
+                            console.log(`Auto-playing: ${animationClips[idleIdx].name}`);
+                        }
+                    }
+                    
+                    // Add GLTF scene to Three.js scene (hidden by default)
+                    // Scale will be set after processVertices computes normalization
+                    gltf.scene.visible = false;
+                    scene.add(gltf.scene);
+                    window.gltfScene = gltf.scene;
+                    
+                    // Show mesh toggle
+                    document.getElementById('showMeshRow').style.display = 'block';
+                    document.getElementById('showMesh').checked = false;
+                    
+                    processVertices(vertices, edges, modelName);
+                    
+                }, (progress) => {
+                    const pct = progress.loaded / progress.total * 100;
+                    document.getElementById('status').textContent = `Loading... ${pct.toFixed(0)}%`;
+                }, (error) => {
+                    console.error('GLTF load error:', error);
+                    document.getElementById('status').textContent = 'Error loading model';
+                });
+            } else {
+                // Load OBJ (original code)
+                animRow.style.display = 'none';
+                document.getElementById('showMeshRow').style.display = 'none';
+                skeletonNormParams = null; // OBJ has no skeleton
+                
+                loader.load(url, (obj) => {
+                    document.getElementById('status').textContent = 'Processing...';
+                    
+                    let vertices = [];
+                    let edges = new Map();
+                    
+                    obj.traverse((child) => {
+                        if (child.isMesh && child.geometry) {
+                            const positions = child.geometry.attributes.position;
+                            const vertexOffset = vertices.length;
+                            
+                            for (let i = 0; i < positions.count; i++) {
+                                vertices.push({
+                                    x: positions.getX(i),
+                                    y: positions.getY(i),
+                                    z: positions.getZ(i)
+                                });
+                            }
+                            
+                            const index = child.geometry.index;
+                            if (index) {
+                                for (let i = 0; i < index.count; i += 3) {
+                                    const a = vertexOffset + index.getX(i);
+                                    const b = vertexOffset + index.getX(i + 1);
+                                    const c = vertexOffset + index.getX(i + 2);
+                                    
+                                    if (!edges.has(a)) edges.set(a, new Set());
+                                    if (!edges.has(b)) edges.set(b, new Set());
+                                    if (!edges.has(c)) edges.set(c, new Set());
+                                    edges.get(a).add(b); edges.get(a).add(c);
+                                    edges.get(b).add(a); edges.get(b).add(c);
+                                    edges.get(c).add(a); edges.get(c).add(b);
+                                }
+                            } else {
+                                for (let i = 0; i < positions.count; i += 3) {
+                                    const a = vertexOffset + i;
+                                    const b = vertexOffset + i + 1;
+                                    const c = vertexOffset + i + 2;
+                                    
+                                    if (!edges.has(a)) edges.set(a, new Set());
+                                    if (!edges.has(b)) edges.set(b, new Set());
+                                    if (!edges.has(c)) edges.set(c, new Set());
+                                    edges.get(a).add(b); edges.get(a).add(c);
+                                    edges.get(b).add(a); edges.get(b).add(c);
+                                    edges.get(c).add(a); edges.get(c).add(b);
+                                }
+                            }
+                        }
+                    });
+                    
+                    processVertices(vertices, edges, modelName);
+                });
+            }
+        }
+        
+        // Shared vertex processing logic
+        function processVertices(vertices, edges, modelName) {
+            // Convert edge map to array for fast lookup
+            vertexEdges = [];
+            for (let i = 0; i < vertices.length; i++) {
+                vertexEdges.push(edges.has(i) ? Array.from(edges.get(i)) : []);
+            }
+            
+            const edgeCount = vertexEdges.filter(e => e.length > 0).length;
+            console.log(`DEBUG: vertices=${vertices.length}, verticesWithEdges=${edgeCount}, edges.size=${edges.size}`);
+            
+            // Get full model bounds
+            const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+            vertices.forEach(v => {
+                bounds.minX = Math.min(bounds.minX, v.x); bounds.maxX = Math.max(bounds.maxX, v.x);
+                bounds.minY = Math.min(bounds.minY, v.y); bounds.maxY = Math.max(bounds.maxY, v.y);
+                bounds.minZ = Math.min(bounds.minZ, v.z); bounds.maxZ = Math.max(bounds.maxZ, v.z);
+            });
+            
+            // Get model settings
+            const settings = modelSettings[modelName] || { headOnly: false };
+            const isHeadOnly = settings.headOnly;
+            
+            const modelWidth = bounds.maxX - bounds.minX;
+            const modelHeight = bounds.maxY - bounds.minY;
+            const modelDepth = bounds.maxZ - bounds.minZ;
+            
+            let cx, cy, cz, scale, headSize;
+            
+            if (!isHeadOnly) {
+                // Full body: find head region (top HEAD_TOP_PERCENT of height)
+                const headThreshold = bounds.maxY - modelHeight * HEAD_TOP_PERCENT;
+                
+                const headBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+                vertices.forEach(v => {
+                    if (v.y >= headThreshold) {
+                        headBounds.minX = Math.min(headBounds.minX, v.x); headBounds.maxX = Math.max(headBounds.maxX, v.x);
+                        headBounds.minY = Math.min(headBounds.minY, v.y); headBounds.maxY = Math.max(headBounds.maxY, v.y);
+                        headBounds.minZ = Math.min(headBounds.minZ, v.z); headBounds.maxZ = Math.max(headBounds.maxZ, v.z);
+                    }
+                });
+                
+                // Validate head bounds
+                if (headBounds.minX === Infinity) {
+                    console.warn('No head vertices found, using full bounds');
+                    cx = (bounds.minX + bounds.maxX) / 2;
+                    cy = (bounds.minY + bounds.maxY) / 2;
+                    cz = (bounds.minZ + bounds.maxZ) / 2;
+                    headSize = Math.max(modelWidth, modelHeight, modelDepth);
+                } else {
+                    cx = (headBounds.minX + headBounds.maxX) / 2;
+                    cy = (headBounds.minY + headBounds.maxY) / 2;
+                    cz = (headBounds.minZ + headBounds.maxZ) / 2;
+                    headSize = Math.max(
+                        headBounds.maxX - headBounds.minX,
+                        headBounds.maxY - headBounds.minY,
+                        headBounds.maxZ - headBounds.minZ
+                    );
+                }
+                console.log(`Full body: headThreshold=${headThreshold.toFixed(2)}, headSize=${headSize.toFixed(2)}`);
+            } else {
+                // Head-only: use full bounds
+                cx = (bounds.minX + bounds.maxX) / 2;
+                cy = (bounds.minY + bounds.maxY) / 2;
+                cz = (bounds.minZ + bounds.maxZ) / 2;
+                headSize = Math.max(modelWidth, modelHeight, modelDepth);
+                console.log(`Head only: size=${headSize.toFixed(2)}`);
+            }
+            
+            scale = HEAD_TARGET_SIZE / headSize;
+            
+            allVertices = vertices.map(v => ({
+                x: (v.x - cx) * scale,
+                y: (v.y - cy) * scale,
+                z: (v.z - cz) * scale
+            }));
+            
+            // For skinned meshes, we need to compute bounds from bone-transformed positions
+            // because the bind matrix may include a scale factor
+            if (skinnedMesh && skinnedMesh.applyBoneTransform) {
+                console.log('Computing skeleton bounds from bone-transformed positions...');
+                const meshPos = skinnedMesh.geometry.attributes.position;
+                const skelBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+                const testVec = new THREE.Vector3();
+                const transformedVerts = []; // Store for head detection
+                
+                // Sample ALL vertices for accurate head detection (not just 2000)
+                const step = 1; // Sample every vertex
+                for (let i = 0; i < meshPos.count; i += step) {
+                    testVec.fromBufferAttribute(meshPos, i);
+                    skinnedMesh.applyBoneTransform(i, testVec);
+                    skelBounds.minX = Math.min(skelBounds.minX, testVec.x);
+                    skelBounds.maxX = Math.max(skelBounds.maxX, testVec.x);
+                    skelBounds.minY = Math.min(skelBounds.minY, testVec.y);
+                    skelBounds.maxY = Math.max(skelBounds.maxY, testVec.y);
+                    skelBounds.minZ = Math.min(skelBounds.minZ, testVec.z);
+                    skelBounds.maxZ = Math.max(skelBounds.maxZ, testVec.z);
+                    transformedVerts.push({ x: testVec.x, y: testVec.y, z: testVec.z });
+                }
+                
+                console.log('Skeleton bounds:', skelBounds);
+                
+                const skelWidth = skelBounds.maxX - skelBounds.minX;
+                const skelHeight = skelBounds.maxY - skelBounds.minY;
+                const skelDepth = skelBounds.maxZ - skelBounds.minZ;
+                
+                if (!isHeadOnly) {
+                    // Find head region in skeleton
+                    const headThreshold = skelBounds.maxY - skelHeight * HEAD_TOP_PERCENT;
+                    
+                    const headBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+                    transformedVerts.forEach(v => {
+                        if (v.y >= headThreshold) {
+                            headBounds.minX = Math.min(headBounds.minX, v.x);
+                            headBounds.maxX = Math.max(headBounds.maxX, v.x);
+                            headBounds.minY = Math.min(headBounds.minY, v.y);
+                            headBounds.maxY = Math.max(headBounds.maxY, v.y);
+                            headBounds.minZ = Math.min(headBounds.minZ, v.z);
+                            headBounds.maxZ = Math.max(headBounds.maxZ, v.z);
+                        }
+                    });
+                    
+                    if (headBounds.minX === Infinity) {
+                        console.warn('No skeleton head vertices found, using full bounds');
+                        cx = (skelBounds.minX + skelBounds.maxX) / 2;
+                        cy = (skelBounds.minY + skelBounds.maxY) / 2;
+                        cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
+                        headSize = Math.max(skelWidth, skelHeight, skelDepth);
+                    } else {
+                        cx = (headBounds.minX + headBounds.maxX) / 2;
+                        cy = (headBounds.minY + headBounds.maxY) / 2;
+                        cz = (headBounds.minZ + headBounds.maxZ) / 2;
+                        headSize = Math.max(
+                            headBounds.maxX - headBounds.minX,
+                            headBounds.maxY - headBounds.minY,
+                            headBounds.maxZ - headBounds.minZ
+                        );
+                    }
+                    console.log('Skeleton head:', { cx, cy, cz, headSize });
+                } else {
+                    cx = (skelBounds.minX + skelBounds.maxX) / 2;
+                    cy = (skelBounds.minY + skelBounds.maxY) / 2;
+                    cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
+                    headSize = Math.max(skelWidth, skelHeight, skelDepth);
+                }
+                
+                scale = HEAD_TARGET_SIZE / headSize;
+                console.log('Skeleton normalization:', { cx, cy, cz, scale });
+            }
+            
+            // Store normalization params for skeleton animation
+            skeletonNormParams = { cx, cy, cz, scale };
+            window._debug = { skeletonNormParams, bounds };
+            console.log('Final skeletonNormParams:', skeletonNormParams);
+            
+            // Camera always at z=3, target origin (head is centered there)
+            camera.position.set(0, 0, 3);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            
+            applySettingsToUI();
+            initParticles();
+            
+            document.getElementById('status').textContent = `Loaded: ${vertices.length} vertices`;
+            
+            // Auto-play handled in GLTF loader
+        }
+        
+        // Comparison mode: load Male and Leonida side by side
+        async function loadComparisonMode() {
+            document.getElementById('status').textContent = 'Loading comparison...';
+            
+            // Clear previous state
+            if (mixer) { mixer.stopAllAction(); mixer = null; }
+            if (window.gltfScene) { scene.remove(window.gltfScene); window.gltfScene = null; }
+            skinnedMesh = null;
+            animationClips = [];
+            document.getElementById('animationRow').style.display = 'none';
+            document.getElementById('showMeshRow').style.display = 'none';
+            
+            const HEAD_TARGET = 2.0;
+            const SPACING = 3; // Space between models
+            
+            // Load Male (OBJ)
+            const maleVertices = await new Promise((resolve) => {
+                loader.load(modelUrls.male, (obj) => {
+                    let verts = [];
+                    obj.traverse((child) => {
+                        if (child.isMesh && child.geometry) {
+                            const pos = child.geometry.attributes.position;
+                            for (let i = 0; i < pos.count; i++) {
+                                verts.push({ x: pos.getX(i), y: pos.getY(i), z: pos.getZ(i) });
+                            }
+                        }
+                    });
+                    resolve(verts);
+                });
+            });
+            
+            // Load Leonida (GLB) - just get bind pose vertices
+            const leonidaVertices = await new Promise((resolve) => {
+                gltfLoader.load(modelUrls.leonida, (gltf) => {
+                    let verts = [];
+                    gltf.scene.traverse((child) => {
+                        if (child.isMesh && child.geometry) {
+                            const pos = child.geometry.attributes.position;
+                            for (let i = 0; i < pos.count; i++) {
+                                verts.push({ x: pos.getX(i), y: pos.getY(i), z: pos.getZ(i) });
+                            }
+                        }
+                    });
+                    resolve(verts);
+                });
+            });
+            
+            // Normalize Male
+            const maleBounds = getBounds(maleVertices);
+            const maleHeadY = maleBounds.maxY - (maleBounds.maxY - maleBounds.minY) * 0.15;
+            const maleHeadBounds = getBounds(maleVertices.filter(v => v.y >= maleHeadY));
+            const maleHeadSize = Math.max(maleHeadBounds.maxX - maleHeadBounds.minX, maleHeadBounds.maxY - maleHeadBounds.minY, maleHeadBounds.maxZ - maleHeadBounds.minZ);
+            const maleScale = HEAD_TARGET / maleHeadSize;
+            const maleCx = (maleHeadBounds.minX + maleHeadBounds.maxX) / 2;
+            const maleCy = (maleHeadBounds.minY + maleHeadBounds.maxY) / 2;
+            const maleCz = (maleHeadBounds.minZ + maleHeadBounds.maxZ) / 2;
+            
+            // Normalize Leonida
+            const leonidaBounds = getBounds(leonidaVertices);
+            const leonidaHeadY = leonidaBounds.maxY - (leonidaBounds.maxY - leonidaBounds.minY) * 0.15;
+            const leonidaHeadBounds = getBounds(leonidaVertices.filter(v => v.y >= leonidaHeadY));
+            const leonidaHeadSize = Math.max(leonidaHeadBounds.maxX - leonidaHeadBounds.minX, leonidaHeadBounds.maxY - leonidaHeadBounds.minY, leonidaHeadBounds.maxZ - leonidaHeadBounds.minZ);
+            const leonidaScale = HEAD_TARGET / leonidaHeadSize;
+            const leonidaCx = (leonidaHeadBounds.minX + leonidaHeadBounds.maxX) / 2;
+            const leonidaCy = (leonidaHeadBounds.minY + leonidaHeadBounds.maxY) / 2;
+            const leonidaCz = (leonidaHeadBounds.minZ + leonidaHeadBounds.maxZ) / 2;
+            
+            console.log(`Male: headSize=${maleHeadSize.toFixed(2)}, scale=${maleScale.toFixed(4)}`);
+            console.log(`Leonida: headSize=${leonidaHeadSize.toFixed(2)}, scale=${leonidaScale.toFixed(4)}`);
+            
+            // Combine vertices with X offset
+            allVertices = [];
+            maleVertices.forEach(v => {
+                allVertices.push({
+                    x: (v.x - maleCx) * maleScale - SPACING,
+                    y: (v.y - maleCy) * maleScale,
+                    z: (v.z - maleCz) * maleScale
+                });
+            });
+            leonidaVertices.forEach(v => {
+                allVertices.push({
+                    x: (v.x - leonidaCx) * leonidaScale + SPACING,
+                    y: (v.y - leonidaCy) * leonidaScale,
+                    z: (v.z - leonidaCz) * leonidaScale
+                });
+            });
+            
+            // Build empty edges (no constellation for comparison)
+            vertexEdges = allVertices.map(() => []);
+            
+            // Move camera back
+            camera.position.set(0, 0, 10);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            
+            initParticles();
+            document.getElementById('status').textContent = `Comparison: Male (${maleVertices.length}) + Leonida (${leonidaVertices.length})`;
+        }
+        
+        function getBounds(verts) {
+            const b = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+            verts.forEach(v => {
+                b.minX = Math.min(b.minX, v.x); b.maxX = Math.max(b.maxX, v.x);
+                b.minY = Math.min(b.minY, v.y); b.maxY = Math.max(b.maxY, v.y);
+                b.minZ = Math.min(b.minZ, v.z); b.maxZ = Math.max(b.maxZ, v.z);
+            });
+            return b;
+        }
+        
+        // Animation selection handler with crossfade blending
+        const CROSSFADE_DURATION = 0.5; // seconds
+        
+        document.getElementById('animationSelect').addEventListener('change', (e) => {
+            if (!mixer || animationClips.length === 0) return;
+            
+            const idx = parseInt(e.target.value);
+            if (!isNaN(idx) && animationClips[idx]) {
+                const newAction = mixer.clipAction(animationClips[idx]);
+                
+                if (currentAction && currentAction !== newAction) {
+                    // Crossfade from current to new animation
+                    newAction.reset();
+                    newAction.play();
+                    currentAction.crossFadeTo(newAction, CROSSFADE_DURATION, true);
+                } else {
+                    // No current action, just play
+                    newAction.play();
+                }
+                
+                currentAction = newAction;
+                console.log(`Playing animation: ${animationClips[idx].name}`);
+            } else if (currentAction) {
+                // "None" selected - fade out
+                currentAction.fadeOut(CROSSFADE_DURATION);
+                currentAction = null;
+            }
+        });
+        
+        // Show/hide mesh toggle
+        document.getElementById('showMesh').addEventListener('change', (e) => {
+            if (window.gltfScene) {
+                window.gltfScene.visible = e.target.checked;
+            }
+        });
+        
+        // Load initial model
+        loadModel('walt');
+        
+        let vertexSurfaceScore = []; // 0 = interior, 1 = surface
+        let particleBounds = { minZ: -1, maxZ: 1 }; // Track actual Z bounds for shader
+        
+        function computeSurfaceData() {
+            // Bin vertices by angle and find max radius per bin
+            const bins = 64; // angular resolution
+            const maxRadius = {};
+            
+            // Initialize bins
+            for (let ay = 0; ay < bins; ay++) {
+                for (let ax = 0; ax < bins; ax++) {
+                    maxRadius[`${ax}_${ay}`] = 0;
+                }
+            }
+            
+            // Find max radius for each angular bin
+            for (const v of allVertices) {
+                const r = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+                const theta = Math.atan2(v.z, v.x); // -PI to PI
+                const phi = Math.acos(v.y / (r + 0.0001)); // 0 to PI
+                
+                const ax = Math.floor((theta + Math.PI) / (2 * Math.PI) * bins) % bins;
+                const ay = Math.floor(phi / Math.PI * bins) % bins;
+                const key = `${ax}_${ay}`;
+                
+                if (r > maxRadius[key]) {
+                    maxRadius[key] = r;
+                }
+            }
+            
+            // Score each vertex by how close it is to the max radius for its bin
+            vertexSurfaceScore = allVertices.map(v => {
+                const r = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+                const theta = Math.atan2(v.z, v.x);
+                const phi = Math.acos(v.y / (r + 0.0001));
+                
+                const ax = Math.floor((theta + Math.PI) / (2 * Math.PI) * bins) % bins;
+                const ay = Math.floor(phi / Math.PI * bins) % bins;
+                const key = `${ax}_${ay}`;
+                
+                const maxR = maxRadius[key] || 1;
+                // Score: 1 if at max radius, 0 if at center
+                return maxR > 0 ? r / maxR : 1;
+            });
+        }
+        
+        function initParticles() {
+            // Density: 100 = all original vertices, 200 = 2x oversampling, etc.
+            let densityFactor = settings.density / 100;
+            
+            // GPU skinning removed the CPU bottleneck - cap raised significantly
+            // Old limit was 50k due to CPU applyBoneTransform() calls
+            // Now all skinning happens on GPU via bone texture sampling
+            // No artificial cap - let density slider go as high as user wants
+            // Volume: 0 = no interior, 100 = add same amount of particles filling interior
+            const volumeFill = settings.volumeDensity / 100;
+            
+            particleBaseData = [];
+            
+            // === SURFACE PARTICLES ===
+            const passes = Math.ceil(densityFactor);
+            const lastPassChance = densityFactor - Math.floor(densityFactor);
+            
+            // Search range scales with mesh size (2% of vertices = good locality)
+            const searchRange = Math.max(10, Math.floor(allVertices.length * 0.02));
+            
+            for (let pass = 0; pass < passes; pass++) {
+                const isLastPass = (pass === passes - 1) && lastPassChance > 0 && lastPassChance < 1;
+                
+                for (let i = 0; i < allVertices.length; i++) {
+                    if (isLastPass && Math.random() > lastPassChance) continue;
+                    
+                    const v = allVertices[i];
+                    
+                    // CONSTELLATION position: on mesh edges (organized)
+                    let cx = v.x, cy = v.y, cz = v.z;
+                    // Constellation: interpolate along mesh edges (always, not just pass > 0)
+                    if (vertexEdges[i] && vertexEdges[i].length > 0) {
+                        const neighbors = vertexEdges[i];
+                        const neighborIdx = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        const neighbor = allVertices[neighborIdx];
+                        const t = Math.random();
+                        cx = v.x + (neighbor.x - v.x) * t;
+                        cy = v.y + (neighbor.y - v.y) * t;
+                        cz = v.z + (neighbor.z - v.z) * t;
+                    }
+                    
+                    // SCATTERED position: local surface jitter (stays near original vertex)
+                    // Start from the same vertex but jitter within local triangle faces
+                    let sx = v.x, sy = v.y, sz = v.z;
+                    
+                    if (vertexEdges[i] && vertexEdges[i].length >= 2) {
+                        const neighbors = vertexEdges[i];
+                        // Pick two random neighbors to form a triangle
+                        const n1 = allVertices[neighbors[Math.floor(Math.random() * neighbors.length)]];
+                        const n2 = allVertices[neighbors[Math.floor(Math.random() * neighbors.length)]];
+                        
+                        // Random barycentric coordinates - favor staying on surface
+                        let u = Math.random();
+                        let w = Math.random();
+                        if (u + w > 1) { u = 1 - u; w = 1 - w; }
+                        const t = 1 - u - w;
+                        
+                        // Interpolate within this local triangle
+                        sx = v.x * t + n1.x * u + n2.x * w;
+                        sy = v.y * t + n1.y * u + n2.y * w;
+                        sz = v.z * t + n1.z * u + n2.z * w;
+                    } else {
+                        // No neighbors - add small tangent jitter
+                        const len = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z) || 1;
+                        const nx = v.x/len, ny = v.y/len, nz = v.z/len;
+                        // Tangent directions
+                        const tx = ny * 0.1 - nz * 0.05;
+                        const ty = nz * 0.1 - nx * 0.05;
+                        const tz = nx * 0.1 - ny * 0.05;
+                        sx = v.x + tx * (Math.random() - 0.5) * 0.5;
+                        sy = v.y + ty * (Math.random() - 0.5) * 0.5;
+                        sz = v.z + tz * (Math.random() - 0.5) * 0.5;
+                    }
+                    
+                    // For constellation: if interpolating along edge, store both vertices
+                    let neighborIdx = -1;
+                    let edgeT = 0;
+                    if (vertexEdges[i] && vertexEdges[i].length > 0) {
+                        const neighbors = vertexEdges[i];
+                        neighborIdx = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        // Recalculate t since we used random above
+                        if (cx !== v.x || cy !== v.y || cz !== v.z) {
+                            const neighbor = allVertices[neighborIdx];
+                            const dx = neighbor.x - v.x;
+                            const dy = neighbor.y - v.y;
+                            const dz = neighbor.z - v.z;
+                            const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                            if (len > 0.001) {
+                                edgeT = Math.sqrt((cx-v.x)**2 + (cy-v.y)**2 + (cz-v.z)**2) / len;
+                            }
+                        }
+                    }
+                    
+                    particleBaseData.push({
+                        // Constellation position (organized)
+                        cx, cy, cz,
+                        // Scattered position (random/organic)
+                        sx, sy, sz,
+                        // Source vertex index for skeletal animation
+                        vertexIndex: i,
+                        neighborIndex: neighborIdx,
+                        edgeT: edgeT,
+                        seed1: Math.random() * Math.PI * 2,
+                        seed2: Math.random() * Math.PI * 2,
+                        driftX: (Math.random() - 0.5) * 2,
+                        driftY: (Math.random() - 0.5) * 2,
+                        driftZ: (Math.random() - 0.5) * 2,
+                        speed: 0.3 + Math.random() * 0.4,
+                        sizeVar: 0.7 + Math.random() * 0.6
+                    });
+                }
+            }
+            
+            // === VOLUME PARTICLES ===
+            // Adds interior particles by interpolating between TWO random surface vertices
+            // This fills the interior volume, not just rays to center
+            if (volumeFill > 0) {
+                const surfaceCount = particleBaseData.length;
+                const volumeCount = Math.floor(surfaceCount * volumeFill);
+                
+                for (let i = 0; i < volumeCount; i++) {
+                    // Pick TWO random surface vertices
+                    const v1 = allVertices[Math.floor(Math.random() * allVertices.length)];
+                    const v2 = allVertices[Math.floor(Math.random() * allVertices.length)];
+                    
+                    // Interpolate between them (creates points throughout volume)
+                    const t = Math.random();
+                    const cx = v1.x + (v2.x - v1.x) * t;
+                    const cy = v1.y + (v2.y - v1.y) * t;
+                    const cz = v1.z + (v2.z - v1.z) * t;
+                    
+                    // For volume, scattered = different random interior position
+                    const v3 = allVertices[Math.floor(Math.random() * allVertices.length)];
+                    const v4 = allVertices[Math.floor(Math.random() * allVertices.length)];
+                    const t2 = Math.random();
+                    const sx = v3.x + (v4.x - v3.x) * t2;
+                    const sy = v3.y + (v4.y - v3.y) * t2;
+                    const sz = v3.z + (v4.z - v3.z) * t2;
+                    
+                    particleBaseData.push({
+                        cx, cy, cz,
+                        sx, sy, sz,
+                        // Volume particles don't follow skeleton (interior)
+                        vertexIndex: -1,
+                        neighborIndex: -1,
+                        edgeT: 0,
+                        seed1: Math.random() * Math.PI * 2,
+                        seed2: Math.random() * Math.PI * 2,
+                        driftX: (Math.random() - 0.5) * 2,
+                        driftY: (Math.random() - 0.5) * 2,
+                        driftZ: (Math.random() - 0.5) * 2,
+                        speed: 0.3 + Math.random() * 0.4,
+                        sizeVar: 0.5 + Math.random() * 0.5 // Slightly smaller for interior
+                    });
+                }
+            }
+            
+            createMesh();
+        }
+        
+        function getFalloffCurveIndex() {
+            const curves = ['linear', 'quadratic', 'cubic', 'exponential', 'logarithmic'];
+            return curves.indexOf(settings.falloffCurve);
+        }
+        
+        function createMesh() {
+            if (modelGroup) {
+                scene.remove(modelGroup);
+            }
+            modelGroup = new THREE.Group();
+            
+            const count = particleBaseData.length;
+            console.log(`🔢 PARTICLE COUNT: ${count.toLocaleString()} particles for ${currentModel}`);
+            if (count === 0) return;
+            
+            const positions = new Float32Array(count * 3);
+            const constellationPositions = new Float32Array(count * 3); // Organized mesh-based
+            const scatteredPositions = new Float32Array(count * 3);     // Random/organic
+            const sizes = new Float32Array(count);
+            const seeds = new Float32Array(count * 4);
+            const drifts = new Float32Array(count * 3);
+            
+            // Compute actual Z bounds from particles
+            particleBounds = { minZ: Infinity, maxZ: -Infinity };
+            for (let i = 0; i < count; i++) {
+                const p = particleBaseData[i];
+                particleBounds.minZ = Math.min(particleBounds.minZ, p.cz);
+                particleBounds.maxZ = Math.max(particleBounds.maxZ, p.cz);
+            }
+            // Fallback if bounds computation failed
+            if (!isFinite(particleBounds.minZ) || !isFinite(particleBounds.maxZ)) {
+                particleBounds = { minZ: -1, maxZ: 1 };
+            }
+            console.log('Particle Z bounds:', particleBounds);
+            
+            for (let i = 0; i < count; i++) {
+                const p = particleBaseData[i];
+                // Constellation positions (organized)
+                constellationPositions[i * 3] = p.cx;
+                constellationPositions[i * 3 + 1] = p.cy;
+                constellationPositions[i * 3 + 2] = p.cz;
+                // Scattered positions (organic)
+                scatteredPositions[i * 3] = p.sx;
+                scatteredPositions[i * 3 + 1] = p.sy;
+                scatteredPositions[i * 3 + 2] = p.sz;
+                // Current position (will be set by shader, just initialize)
+                positions[i * 3] = p.cx;
+                positions[i * 3 + 1] = p.cy;
+                positions[i * 3 + 2] = p.cz;
+                sizes[i] = settings.size * p.sizeVar;
+                seeds[i * 4] = p.seed1;
+                seeds[i * 4 + 1] = p.seed2;
+                seeds[i * 4 + 2] = p.speed;
+                seeds[i * 4 + 3] = p.sizeVar;
+                drifts[i * 3] = p.driftX;
+                drifts[i * 3 + 1] = p.driftY;
+                drifts[i * 3 + 2] = p.driftZ;
+            }
+            
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('constellationPosition', new THREE.BufferAttribute(constellationPositions, 3));
+            geometry.setAttribute('scatteredPosition', new THREE.BufferAttribute(scatteredPositions, 3));
+            // Keep basePosition for backwards compat (points to constellation)
+            geometry.setAttribute('basePosition', new THREE.BufferAttribute(constellationPositions.slice(), 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            geometry.setAttribute('seeds', new THREE.BufferAttribute(seeds, 4));
+            geometry.setAttribute('drift', new THREE.BufferAttribute(drifts, 3));
+            
+            const shapeVal = settings.shape === 'circle' ? 0 : (settings.shape === 'square' ? 1 : 2);
+            
+            const material = new THREE.ShaderMaterial({
+                uniforms: {
+                    color: { value: new THREE.Color(settings.color) },
+                    shape: { value: shapeVal },
+                    time: { value: 0 },
+                    scatter: { value: settings.scatter / 100 }, // 0 = constellation, 1 = scattered
+                    effectStart: { value: settings.effectStart / 100 },
+                    dissipation: { value: settings.dissipation / 100 },
+                    floatAway: { value: settings.floatAway / 100 },
+                    floatDir: { value: settings.floatDir / 100 },
+                    falloffCurve: { value: getFalloffCurveIndex() },
+                    reference: { value: settings.reference === 'camera' ? 1 : 0 },
+                    cameraDir: { value: new THREE.Vector3(0, 0, -1) },
+                    cameraPos: { value: new THREE.Vector3(0, 0, 3) },
+                    modelBoundsZ: { value: new THREE.Vector2(particleBounds.minZ, particleBounds.maxZ) },
+                    surfaceFloat: { value: settings.surfaceFloat / 100 },
+                    surfaceSpeed: { value: settings.surfaceSpeed / 100 },
+                    assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
+                    assemblyDirection: { value: settings.assemblyDirection === 'above' ? 1 : settings.assemblyDirection === 'below' ? 2 : 0 },
+                    assemblySpread: { value: settings.assemblySpread / 100 },
+                    assemblyDirRandom: { value: settings.assemblyDirRandom / 100 },
+                    assemblyTurbulence: { value: settings.assemblyTurbulence / 100 },
+                    assemblyBackDelay: { value: settings.assemblyBackDelay / 100 },
+                    assemblyFrontDelay: { value: settings.assemblyFrontDelay / 100 },
+                    assemblyRandomTime: { value: settings.assemblyRandomTime / 100 },
+                    assemblyFalloff: { value: settings.assemblyFalloff / 100 },
+                    assemblyFadeEasing: { value: settings.assemblyFadeEasing === 'ease-in' ? 1 : settings.assemblyFadeEasing === 'ease-out' ? 2 : settings.assemblyFadeEasing === 'ease-in-out' ? 3 : 0 },
+                    assemblyDistance: { value: settings.assemblyDistance / 10 },
+                    assemblyDurationSpread: { value: settings.assemblyDurationSpread / 100 },
+                    assemblyEasing: { value: settings.assemblyEasing === 'random-type' ? 1 : settings.assemblyEasing === 'random-intensity' ? 2 : settings.assemblyEasing === 'random-overshoot' ? 3 : 0 },
+                    assemblyBouncePercent: { value: settings.assemblyBouncePercent / 100 },
+                    assemblyBounceStrength: { value: settings.assemblyBounceStrength / 100 },
+                    isDisassembling: { value: 0.0 },
+                    // GPU Skinning uniforms
+                    boneTexture: { value: null },
+                    boneCount: { value: 0 },
+                    bindMatrix: { value: new THREE.Matrix4() },
+                    bindMatrixInverse: { value: new THREE.Matrix4() },
+                    normCenter: { value: new THREE.Vector3() },
+                    normScale: { value: 1.0 },
+                    useGPUSkinning: { value: false }
+                },
+                vertexShader: `
+                    attribute float size;
+                    attribute vec3 constellationPosition;
+                    attribute vec3 scatteredPosition;
+                    attribute vec4 seeds;
+                    attribute vec3 drift;
+                    
+                    // GPU Skinning attributes
+                    attribute vec4 skinIndex;
+                    attribute vec4 skinWeight;
+                    attribute vec3 restPosition;
+                    attribute vec4 neighborSkinIndex;
+                    attribute vec4 neighborSkinWeight;
+                    attribute vec3 neighborRestPosition;
+                    attribute float edgeFactor;
+                    
+                    // GPU Skinning uniforms
+                    uniform sampler2D boneTexture;
+                    uniform int boneCount;
+                    uniform mat4 bindMatrix;
+                    uniform mat4 bindMatrixInverse;
+                    uniform vec3 normCenter;
+                    uniform float normScale;
+                    uniform bool useGPUSkinning;
+                    
+                    uniform float time;
+                    uniform float scatter;
+                    uniform float effectStart;
+                    uniform float dissipation;
+                    uniform float floatAway;
+                    uniform float floatDir;
+                    uniform int falloffCurve;
+                    uniform int reference;
+                    uniform vec3 cameraDir;
+                    uniform vec3 cameraPos;
+                    uniform vec2 modelBoundsZ;
+                    uniform float surfaceFloat;
+                    uniform float surfaceSpeed;
+                    uniform float assemblyProgress;
+                    uniform int assemblyDirection;
+                    uniform float assemblySpread;
+                    uniform float assemblyDirRandom;
+                    uniform float assemblyTurbulence;
+                    uniform float assemblyBackDelay;
+                    uniform float assemblyFrontDelay;
+                    uniform float assemblyRandomTime;
+                    uniform float assemblyFalloff;
+                    uniform int assemblyFadeEasing;
+                    uniform float assemblyDistance;
+                    uniform float assemblyDurationSpread;
+                    uniform int assemblyEasing;
+                    uniform float assemblyBouncePercent;
+                    uniform float assemblyBounceStrength;
+                    uniform float isDisassembling;
+                    
+                    varying float vAlpha;
+                    
+                    float applyFalloff(float t, int curve) {
+                        if (curve == 0) return t; // linear
+                        if (curve == 1) return t * t; // quadratic
+                        if (curve == 2) return t * t * t; // cubic
+                        if (curve == 3) return 1.0 - exp(-t * 3.0); // exponential
+                        if (curve == 4) return log(1.0 + t * 9.0) / log(10.0); // logarithmic
+                        return t;
+                    }
+                    
+                    // GPU Skinning: Read bone matrix from texture
+                    mat4 getBoneMatrix(float boneIdx) {
+                        float size = float(textureSize(boneTexture, 0).x);
+                        float j = boneIdx * 4.0;
+                        float x = mod(j, size);
+                        float y = floor(j / size);
+                        float dx = 1.0 / size;
+                        float dy = 1.0 / size;
+                        y = dy * (y + 0.5);
+                        vec4 v1 = texture2D(boneTexture, vec2(dx * (x + 0.5), y));
+                        vec4 v2 = texture2D(boneTexture, vec2(dx * (x + 1.5), y));
+                        vec4 v3 = texture2D(boneTexture, vec2(dx * (x + 2.5), y));
+                        vec4 v4 = texture2D(boneTexture, vec2(dx * (x + 3.5), y));
+                        return mat4(v1, v2, v3, v4);
+                    }
+                    
+                    // GPU Skinning: Apply bone transform to vertex
+                    vec3 applyGPUSkinning(vec3 pos, vec4 skinIdx, vec4 skinWgt) {
+                        mat4 boneMatX = getBoneMatrix(skinIdx.x);
+                        mat4 boneMatY = getBoneMatrix(skinIdx.y);
+                        mat4 boneMatZ = getBoneMatrix(skinIdx.z);
+                        mat4 boneMatW = getBoneMatrix(skinIdx.w);
+                        vec4 skinVertex = bindMatrix * vec4(pos, 1.0);
+                        vec4 skinned = vec4(0.0);
+                        skinned += boneMatX * skinVertex * skinWgt.x;
+                        skinned += boneMatY * skinVertex * skinWgt.y;
+                        skinned += boneMatZ * skinVertex * skinWgt.z;
+                        skinned += boneMatW * skinVertex * skinWgt.w;
+                        return (bindMatrixInverse * skinned).xyz;
+                    }
+                    
+                    void main() {
+                        // Determine constellation position (GPU skinned or attribute)
+                        vec3 animatedConstellationPos;
+                        if (useGPUSkinning) {
+                            // GPU skinning: transform rest position using bone matrices
+                            vec3 pos1 = applyGPUSkinning(restPosition, skinIndex, skinWeight);
+                            vec3 pos2 = applyGPUSkinning(neighborRestPosition, neighborSkinIndex, neighborSkinWeight);
+                            vec3 skinnedPos = mix(pos1, pos2, edgeFactor);
+                            // Apply normalization
+                            animatedConstellationPos = (skinnedPos - normCenter) * normScale;
+                        } else {
+                            // Use pre-computed constellation position (CPU fallback)
+                            animatedConstellationPos = constellationPosition;
+                        }
+                        
+                        // Blend between constellation (organized) and scattered (organic) positions
+                        // Cap at 50% blend - full scatter looks too chaotic
+                        float scatterAmount = scatter * 0.5;
+                        vec3 basePosition = mix(animatedConstellationPos, scatteredPosition, scatterAmount);
+                        vec3 pos = basePosition;
+                        
+                        // === Surface floating for ALL particles ===
+                        // Creates gentle movement while staying near the surface
+                        float t1 = time * surfaceSpeed + seeds.x;
+                        float t2 = time * surfaceSpeed * 0.7 + seeds.y;
+                        float t3 = time * surfaceSpeed * 0.5 + seeds.x * 2.0;
+                        
+                        // Tangent-ish movement (perpendicular to radial direction)
+                        vec3 radial = normalize(basePosition);
+                        vec3 tangent1 = normalize(cross(radial, vec3(0.0, 1.0, 0.0)));
+                        vec3 tangent2 = normalize(cross(radial, tangent1));
+                        
+                        // Gentle floating on surface
+                        float floatX = sin(t1) * surfaceFloat * 0.05;
+                        float floatY = sin(t2) * surfaceFloat * 0.03;
+                        float floatZ = sin(t3) * surfaceFloat * 0.02;
+                        
+                        pos += tangent1 * floatX + tangent2 * floatY;
+                        pos += radial * floatZ * 0.3; // Tiny bit of in/out breathing
+                        
+                        // === Depth calculation for dissipation ===
+                        // Transform basePosition to world space for camera-relative calculations
+                        vec3 worldBasePos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
+                        
+                        float depth;
+                        if (reference == 1) {
+                            // Camera reference - use world-space position
+                            vec3 toPoint = normalize(worldBasePos);
+                            depth = -dot(toPoint, cameraDir);
+                            depth = (depth + 1.0) / 2.0;
+                        } else {
+                            // Model reference - use local space
+                            depth = (basePosition.z + 1.0) / 2.0;
+                        }
+                        
+                        // effectStart: portion of front unaffected (0-1 scale from %)
+                        float safeThreshold = 1.0 - effectStart;
+                        float normalizedBack = 0.0;
+                        
+                        if (depth < safeThreshold) {
+                            normalizedBack = (safeThreshold - depth) / safeThreshold;
+                            normalizedBack = clamp(normalizedBack, 0.0, 1.0);
+                        }
+                        
+                        // Apply falloff curve
+                        float falloff = applyFalloff(normalizedBack, falloffCurve);
+                        
+                        // Float away (only for back particles)
+                        float floatAmount = falloff * floatAway;
+                        float anim = sin(time * seeds.z + seeds.x) * 0.5 + 0.5;
+                        
+                        // Away from camera = direction camera is looking (in world space)
+                        // Transform back to local space for position offset
+                        mat3 normalMat = mat3(modelMatrix);
+                        mat3 invNormalMat = inverse(normalMat);
+                        vec3 localCameraDir = normalize(invNormalMat * cameraDir);
+                        vec3 awayDir = localCameraDir;
+                        
+                        // First: filter out toward-camera component from drift
+                        vec3 filteredDrift = drift;
+                        vec3 towardCamera = -localCameraDir;
+                        float towardComponent = dot(drift, towardCamera);
+                        if (towardComponent > 0.0) {
+                            filteredDrift -= towardCamera * towardComponent;
+                        }
+                        
+                        // floatDir: 0 = random (but never toward camera), 1 = directly away
+                        float driftMag = length(drift);
+                        vec3 floatDirection = mix(filteredDrift, awayDir * driftMag, floatDir);
+                        
+                        pos += floatDirection * floatAmount * (0.5 + anim * 0.5);
+                        pos.y += sin(time * 0.5 + seeds.y) * 0.03 * falloff;
+                        
+                        // === Assembly/Disassembly animation ===
+                        // Logic:
+                        // 1. Direction: based on assemblyDirection (0=back, 1=above, 2=below)
+                        // 2. Timing: Closer particles first, further particles last
+                        // 3. Randomization: Each particle has random start offset (randomTime)
+                        // 4. Falloff: Particles fade as they get further (assemblyFalloff)
+                        float assemblyDistanceTraveled = 0.0; // Track assembly movement for falloff
+                        float assemblyParticleProgress = 0.0; // Track time progress for fade
+                        if (assemblyProgress < 0.999) {
+                            // === Base direction based on mode ===
+                            vec3 baseDir;
+                            float closeness; // 0 = further from destination, 1 = closer to destination
+                            
+                            if (assemblyDirection == 0) {
+                                // Back: fly away from camera
+                                baseDir = awayDir;
+                                closeness = normalizedBack; // back particles are "closer" to destination
+                            } else if (assemblyDirection == 1) {
+                                // Above: fly upward
+                                baseDir = vec3(0.0, 1.0, 0.0);
+                                // normalizedTop: 1 = top, 0 = bottom (using original position)
+                                float normalizedTop = clamp((constellationPosition.y + 1.5) / 3.0, 0.0, 1.0);
+                                closeness = normalizedTop; // top particles are "closer" to destination
+                            } else {
+                                // Below: fly downward
+                                baseDir = vec3(0.0, -1.0, 0.0);
+                                float normalizedBottom = clamp(1.0 - (constellationPosition.y + 1.5) / 3.0, 0.0, 1.0);
+                                closeness = normalizedBottom; // bottom particles are "closer" to destination
+                            }
+                            
+                            // === Direction with spread ===
+                            // Add random spread perpendicular to base direction
+                            vec3 spreadDir = normalize(drift - baseDir * dot(drift, baseDir));
+                            if (length(spreadDir) < 0.01) spreadDir = vec3(1.0, 0.0, 0.0);
+                            vec3 spreadDirection = normalize(baseDir + spreadDir * assemblySpread);
+                            
+                            // === Per-particle direction randomness ===
+                            // Create a completely random direction per particle
+                            vec3 randomDir = normalize(vec3(
+                                fract(seeds.x * 23.7 + seeds.z * 11.3) * 2.0 - 1.0,
+                                fract(seeds.y * 17.1 + seeds.w * 7.9) * 2.0 - 1.0,
+                                fract(seeds.z * 13.3 + seeds.x * 19.7) * 2.0 - 1.0
+                            ));
+                            // Blend between spread direction and random direction
+                            vec3 flyAwayDir = normalize(mix(spreadDirection, randomDir, assemblyDirRandom));
+                            
+                            // furtherness: 0 = closer particles, 1 = further particles
+                            float furtherness = 1.0 - closeness;
+                            
+                            // === Particle start time ===
+                            // Closer particles start at assemblyBackDelay
+                            // Further particles start at assemblyFrontDelay
+                            // Random spread adds variation to start times
+                            float baseStartTime = mix(assemblyBackDelay, assemblyFrontDelay, furtherness);
+                            float randomOffset = fract(seeds.x * 7.31 + seeds.y * 3.17 + seeds.w * 5.13) * assemblyRandomTime * 0.5;
+                            float startTime = clamp(baseStartTime + randomOffset, 0.0, 0.9);
+                            
+                            // === Particle progress ===
+                            float globalProgress = 1.0 - assemblyProgress; // 0->1 during disassemble
+                            
+                            // Per-particle duration: randomize how long each particle takes
+                            // With spread, some particles finish early (fast), others use full time (slow)
+                            // Range: [1.0 - spread*0.8, 1.0] so all particles complete within animation
+                            float durationRandom = fract(seeds.z * 11.7 + seeds.w * 4.3);
+                            float durationMult = 1.0 - durationRandom * assemblyDurationSpread * 0.8;
+                            durationMult = clamp(durationMult, 0.2, 1.0); // 20% to 100% of base duration
+                            
+                            float baseDuration = max(0.01, 1.0 - startTime);
+                            float particleDuration = baseDuration * durationMult;
+                            float particleProgress = clamp((globalProgress - startTime) / particleDuration, 0.0, 1.0);
+                            assemblyParticleProgress = particleProgress; // Save for fade calculation
+                            
+                            // === Easing based on mode ===
+                            float ease;
+                            float easingSeed = fract(seeds.x * 13.7 + seeds.y * 17.3 + seeds.z * 7.9);
+                            
+                            if (assemblyEasing == 0) {
+                                // Uniform: smooth ease-in-out for all
+                                ease = particleProgress * particleProgress * (3.0 - 2.0 * particleProgress);
+                            } else if (assemblyEasing == 1) {
+                                // Random type with controllable bounce
+                                // First determine if this particle bounces (separate seed)
+                                float bounceSeed = fract(seeds.w * 19.3 + seeds.x * 11.7);
+                                bool shouldBounce = bounceSeed < assemblyBouncePercent;
+                                
+                                if (shouldBounce && assemblyBounceStrength > 0.0) {
+                                    float t = particleProgress;
+                                    // Scale strength to be more subtle (0-1 range, squared for gradual control)
+                                    float strength = assemblyBounceStrength * assemblyBounceStrength * 0.5;
+                                    float bounceEase;
+                                    
+                                    if (isDisassembling > 0.5) {
+                                        // DISASSEMBLE: Subtle pull-back then spring forward
+                                        float pullback = 0.08 * strength; // Gentle pull-back
+                                        
+                                        if (t < 0.1) {
+                                            // Gentle pull back
+                                            float t2 = t / 0.1;
+                                            bounceEase = -pullback * sin(t2 * 3.14159 * 0.5);
+                                        } else if (t < 0.4) {
+                                            // Spring forward
+                                            float t2 = (t - 0.1) / 0.3;
+                                            bounceEase = -pullback * (1.0 - t2) + (1.0 + strength * 0.05) * pow(t2, 0.7);
+                                        } else {
+                                            // Gentle settle with tiny wobble
+                                            float t2 = (t - 0.4) / 0.6;
+                                            float wobble = sin(t2 * 3.14159 * 2.5) * strength * 0.03 * pow(1.0 - t2, 2.0);
+                                            bounceEase = 1.0 + strength * 0.05 * (1.0 - t2) + wobble;
+                                        }
+                                    } else {
+                                        // ASSEMBLE: Smooth approach with gentle elastic settle at end
+                                        // Base smooth motion
+                                        float smoothT = t * t * (3.0 - 2.0 * t); // Smooth step
+                                        
+                                        // Add elastic wobble only near the end (last 40%)
+                                        float wobble = 0.0;
+                                        if (t > 0.6) {
+                                            float wobbleT = (t - 0.6) / 0.4; // 0-1 in final phase
+                                            float freq = 2.0 + strength;
+                                            float amp = strength * 0.15 * (1.0 - wobbleT); // Decaying amplitude
+                                            wobble = sin(wobbleT * 3.14159 * freq) * amp;
+                                        }
+                                        
+                                        bounceEase = smoothT + wobble;
+                                    }
+                                    ease = bounceEase;
+                                } else {
+                                    // Non-bounce: distribute among linear, ease-in, ease-out, ease-in-out
+                                    int easingType = int(easingSeed * 4.0);
+                                    if (easingType == 0) {
+                                        ease = particleProgress; // Linear
+                                    } else if (easingType == 1) {
+                                        ease = particleProgress * particleProgress * particleProgress; // Ease-in
+                                    } else if (easingType == 2) {
+                                        ease = 1.0 - pow(1.0 - particleProgress, 3.0); // Ease-out
+                                    } else {
+                                        ease = particleProgress * particleProgress * (3.0 - 2.0 * particleProgress); // Ease-in-out
+                                    }
+                                }
+                            } else if (assemblyEasing == 2) {
+                                // Random intensity: random exponent (1-4) per particle
+                                float exponent = 1.0 + easingSeed * 3.0;
+                                // Apply as ease-out with variable intensity
+                                ease = 1.0 - pow(1.0 - particleProgress, exponent);
+                            } else {
+                                // Random overshoot: some particles overshoot and bounce back
+                                float overshootAmount = easingSeed * 0.3; // 0-30% overshoot
+                                float t = particleProgress;
+                                if (t < 0.7) {
+                                    // Travel to destination + overshoot
+                                    ease = (1.0 + overshootAmount) * (t / 0.7);
+                                    ease = ease * ease * (3.0 - 2.0 * ease / (1.0 + overshootAmount)); // smooth
+                                } else {
+                                    // Settle back from overshoot
+                                    float settleT = (t - 0.7) / 0.3;
+                                    float overshootPos = 1.0 + overshootAmount;
+                                    ease = overshootPos - overshootAmount * settleT;
+                                }
+                                ease = clamp(ease, 0.0, 1.0 + overshootAmount);
+                            }
+                            
+                            // === Distance ===
+                            float maxDist = assemblyDistance;
+                            float particleDist = maxDist * (0.5 + seeds.w * 0.5);
+                            
+                            // Calculate and apply assembly offset
+                            vec3 assemblyOffset = flyAwayDir * particleDist * ease;
+                            pos += assemblyOffset;
+                            
+                            // Store assembly distance for falloff (only the assembly movement, not other effects)
+                            float assemblyDistanceTraveled = length(assemblyOffset);
+                            
+                            // === Turbulence (swirl during motion) ===
+                            if (assemblyTurbulence > 0.0) {
+                                // Create perpendicular axes for swirl
+                                vec3 perpX = normalize(cross(flyAwayDir, vec3(0.0, 1.0, 0.0)));
+                                if (length(perpX) < 0.1) perpX = normalize(cross(flyAwayDir, vec3(1.0, 0.0, 0.0)));
+                                vec3 perpY = normalize(cross(flyAwayDir, perpX));
+                                
+                                // Per-particle phase and frequency
+                                float phase = seeds.x * 6.28318 + seeds.y * 3.14159;
+                                float freq = 2.0 + seeds.z * 3.0; // 2-5 oscillations
+                                
+                                // Swirl increases with travel distance, fades at end
+                                float swirlStrength = ease * (1.0 - ease * 0.5) * assemblyTurbulence * particleDist * 0.3;
+                                
+                                // Oscillating offset perpendicular to travel direction
+                                float swirlX = sin(ease * freq * 6.28318 + phase) * swirlStrength;
+                                float swirlY = cos(ease * freq * 6.28318 + phase + seeds.w * 3.14) * swirlStrength;
+                                
+                                pos += perpX * swirlX + perpY * swirlY;
+                            }
+                        }
+                        
+                        // Alpha based on dissipation
+                        vAlpha = 1.0 - falloff * dissipation;
+                        vAlpha = clamp(vAlpha, 0.02, 1.0);
+                        
+                        // === Assembly Fade: particles disappear based on time progress ===
+                        if (assemblyProgress < 0.999 && assemblyParticleProgress > 0.0) {
+                            // Fade out at X% of particle's animation duration
+                            float fadeAt = assemblyFalloff;
+                            if (assemblyParticleProgress > fadeAt) {
+                                vAlpha = 0.0;
+                            } else if (assemblyParticleProgress > fadeAt * 0.5) {
+                                // Fade starting at 50% of threshold
+                                float fadeStart = fadeAt * 0.5;
+                                float fadeProgress = (assemblyParticleProgress - fadeStart) / (fadeAt - fadeStart);
+                                
+                                // Apply easing to fade progress
+                                float easedFade;
+                                if (assemblyFadeEasing == 0) {
+                                    // Linear
+                                    easedFade = fadeProgress;
+                                } else if (assemblyFadeEasing == 1) {
+                                    // Ease-in (slow start, fast end)
+                                    easedFade = fadeProgress * fadeProgress * fadeProgress;
+                                } else if (assemblyFadeEasing == 2) {
+                                    // Ease-out (fast start, slow end)
+                                    easedFade = 1.0 - pow(1.0 - fadeProgress, 3.0);
+                                } else {
+                                    // Ease-in-out
+                                    easedFade = fadeProgress * fadeProgress * (3.0 - 2.0 * fadeProgress);
+                                }
+                                
+                                vAlpha *= 1.0 - easedFade;
+                            }
+                        }
+                        
+                        // Size reduction toward back
+                        float sizeScale = 1.0 - falloff * 0.5;
+                        
+                        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                        gl_PointSize = size * sizeScale * (80.0 / -mvPosition.z);
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 color;
+                    uniform int shape;
+                    varying float vAlpha;
+                    
+                    void main() {
+                        vec2 center = gl_PointCoord - 0.5;
+                        float dist = length(center);
+                        float a = vAlpha;
+                        
+                        if (shape == 0) {
+                            if (dist > 0.5) discard;
+                        } else if (shape == 1) {
+                            // square
+                        } else {
+                            if (dist > 0.5) discard;
+                            a *= smoothstep(0.5, 0.1, dist);
+                        }
+                        
+                        gl_FragColor = vec4(color, a);
+                    }
+                `,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            
+            pointsMesh = new THREE.Points(geometry, material);
+            modelGroup.add(pointsMesh);
+            scene.add(modelGroup);
+            
+            // Setup GPU skinning if we have a skinned mesh
+            if (skinnedMesh && skinnedMesh.skeleton) {
+                const hasAttributes = createGPUSkinnedParticleAttributes(skinnedMesh, particleBaseData, geometry);
+                if (hasAttributes) {
+                    setupGPUSkinning();
+                    console.log('GPU Skinning ENABLED - no CPU skinning loop needed!');
+                } else {
+                    console.log('GPU Skinning DISABLED - using CPU fallback');
+                }
+            }
+            
+            document.getElementById('status').textContent = `${count.toLocaleString()} particles`;
+        }
+        
+        // ============================================================
+        // GPU SKINNING FUNCTIONS
+        // ============================================================
+        
+        function createGPUSkinnedParticleAttributes(mesh, baseData, geom) {
+            if (!mesh || !mesh.geometry) return false;
+            const meshGeom = mesh.geometry;
+            
+            if (!meshGeom.attributes.skinIndex || !meshGeom.attributes.skinWeight) {
+                console.warn('Mesh has no skinning attributes - GPU skinning disabled');
+                return false;
+            }
+            
+            const meshSkinIndex = meshGeom.attributes.skinIndex;
+            const meshSkinWeight = meshGeom.attributes.skinWeight;
+            const meshPositions = meshGeom.attributes.position;
+            
+            const count = baseData.length;
+            const skinIndices = new Float32Array(count * 4);
+            const skinWeights = new Float32Array(count * 4);
+            const restPositions = new Float32Array(count * 3);
+            const neighborSkinIndices = new Float32Array(count * 4);
+            const neighborSkinWeights = new Float32Array(count * 4);
+            const neighborRestPositions = new Float32Array(count * 3);
+            const edgeFactors = new Float32Array(count);
+            
+            for (let i = 0; i < count; i++) {
+                const p = baseData[i];
+                const vi = p.vertexIndex;
+                
+                skinIndices[i * 4 + 0] = meshSkinIndex.getX(vi);
+                skinIndices[i * 4 + 1] = meshSkinIndex.getY(vi);
+                skinIndices[i * 4 + 2] = meshSkinIndex.getZ(vi);
+                skinIndices[i * 4 + 3] = meshSkinIndex.getW(vi);
+                
+                skinWeights[i * 4 + 0] = meshSkinWeight.getX(vi);
+                skinWeights[i * 4 + 1] = meshSkinWeight.getY(vi);
+                skinWeights[i * 4 + 2] = meshSkinWeight.getZ(vi);
+                skinWeights[i * 4 + 3] = meshSkinWeight.getW(vi);
+                
+                restPositions[i * 3 + 0] = meshPositions.getX(vi);
+                restPositions[i * 3 + 1] = meshPositions.getY(vi);
+                restPositions[i * 3 + 2] = meshPositions.getZ(vi);
+                
+                const ni = p.neighborIndex >= 0 ? p.neighborIndex : vi;
+                edgeFactors[i] = p.edgeT || 0;
+                
+                neighborSkinIndices[i * 4 + 0] = meshSkinIndex.getX(ni);
+                neighborSkinIndices[i * 4 + 1] = meshSkinIndex.getY(ni);
+                neighborSkinIndices[i * 4 + 2] = meshSkinIndex.getZ(ni);
+                neighborSkinIndices[i * 4 + 3] = meshSkinIndex.getW(ni);
+                
+                neighborSkinWeights[i * 4 + 0] = meshSkinWeight.getX(ni);
+                neighborSkinWeights[i * 4 + 1] = meshSkinWeight.getY(ni);
+                neighborSkinWeights[i * 4 + 2] = meshSkinWeight.getZ(ni);
+                neighborSkinWeights[i * 4 + 3] = meshSkinWeight.getW(ni);
+                
+                neighborRestPositions[i * 3 + 0] = meshPositions.getX(ni);
+                neighborRestPositions[i * 3 + 1] = meshPositions.getY(ni);
+                neighborRestPositions[i * 3 + 2] = meshPositions.getZ(ni);
+            }
+            
+            geom.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndices, 4));
+            geom.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeights, 4));
+            geom.setAttribute('restPosition', new THREE.BufferAttribute(restPositions, 3));
+            geom.setAttribute('neighborSkinIndex', new THREE.BufferAttribute(neighborSkinIndices, 4));
+            geom.setAttribute('neighborSkinWeight', new THREE.BufferAttribute(neighborSkinWeights, 4));
+            geom.setAttribute('neighborRestPosition', new THREE.BufferAttribute(neighborRestPositions, 3));
+            geom.setAttribute('edgeFactor', new THREE.BufferAttribute(edgeFactors, 1));
+            
+            console.log(`GPU Skinning: Added skinning attributes for ${count} particles`);
+            return true;
+        }
+        
+        function setupGPUSkinning() {
+            if (!skinnedMesh || !skinnedMesh.skeleton || !pointsMesh || !skeletonNormParams) {
+                console.warn('Cannot setup GPU skinning - missing components');
+                return false;
+            }
+            
+            const skeleton = skinnedMesh.skeleton;
+            if (!skeleton.boneTexture) {
+                skeleton.computeBoneTexture();
+            }
+            
+            const material = pointsMesh.material;
+            material.uniforms.boneTexture = { value: skeleton.boneTexture };
+            material.uniforms.boneCount = { value: skeleton.bones.length };
+            material.uniforms.bindMatrix = { value: skinnedMesh.bindMatrix };
+            material.uniforms.bindMatrixInverse = { value: skinnedMesh.bindMatrixInverse };
+            material.uniforms.normCenter = { value: new THREE.Vector3(skeletonNormParams.cx, skeletonNormParams.cy, skeletonNormParams.cz) };
+            material.uniforms.normScale = { value: skeletonNormParams.scale };
+            material.uniforms.useGPUSkinning = { value: true };
+            
+            gpuSkinningEnabled = true;
+            console.log('GPU Skinning setup complete:', skeleton.bones.length, 'bones');
+            return true;
+        }
+        
+        // ============================================================
+        // END GPU SKINNING FUNCTIONS
+        // ============================================================
+        
+        // Update particles to follow skinned mesh skeleton (CPU fallback)
+        const _tempVec = new THREE.Vector3();
+        const _tempVec2 = new THREE.Vector3();
+        
+        let skeletonUpdateCount = 0;
+        function updateParticlesFromSkeleton() {
+            if (!skinnedMesh || !pointsMesh || !skeletonNormParams) {
+                if (skeletonUpdateCount === 0) console.log('Skeleton update skipped:', { skinnedMesh: !!skinnedMesh, pointsMesh: !!pointsMesh, skeletonNormParams: !!skeletonNormParams });
+                return;
+            }
+            if (!skinnedMesh.skeleton || !skinnedMesh.applyBoneTransform) {
+                if (skeletonUpdateCount === 0) console.log('No skeleton or applyBoneTransform:', { skeleton: !!skinnedMesh.skeleton, applyBoneTransform: !!skinnedMesh.applyBoneTransform });
+                return;
+            }
+            
+            const meshGeom = skinnedMesh.geometry;
+            const meshPositions = meshGeom.attributes.position;
+            if (!meshPositions) {
+                if (skeletonUpdateCount === 0) console.log('No mesh positions');
+                return;
+            }
+            
+            if (skeletonUpdateCount === 0) console.log('Updating particles from skeleton...');
+            
+            const geometry = pointsMesh.geometry;
+            const positions = geometry.attributes.constellationPosition;
+            const scatteredPositions = geometry.attributes.scatteredPosition;
+            if (!positions || !scatteredPositions) return;
+            
+            const { cx, cy, cz, scale } = skeletonNormParams;
+            
+            for (let i = 0; i < particleBaseData.length; i++) {
+                const p = particleBaseData[i];
+                const vi = p.vertexIndex;
+                if (vi === undefined || vi < 0) continue;
+                
+                // Get original vertex position from mesh geometry
+                _tempVec.fromBufferAttribute(meshPositions, vi);
+                
+                // Apply bone transformation (modifies _tempVec in place)
+                skinnedMesh.applyBoneTransform(vi, _tempVec);
+                
+                // Apply normalization (same as when we loaded the model)
+                let px = (_tempVec.x - cx) * scale;
+                let py = (_tempVec.y - cy) * scale;
+                let pz = (_tempVec.z - cz) * scale;
+                
+                // If this particle interpolates along an edge, blend with neighbor
+                if (p.neighborIndex >= 0 && p.edgeT > 0) {
+                    _tempVec2.fromBufferAttribute(meshPositions, p.neighborIndex);
+                    skinnedMesh.applyBoneTransform(p.neighborIndex, _tempVec2);
+                    const nx = (_tempVec2.x - cx) * scale;
+                    const ny = (_tempVec2.y - cy) * scale;
+                    const nz = (_tempVec2.z - cz) * scale;
+                    
+                    px = px + (nx - px) * p.edgeT;
+                    py = py + (ny - py) * p.edgeT;
+                    pz = pz + (nz - pz) * p.edgeT;
+                }
+                
+                // Update constellation position
+                positions.setXYZ(i, px, py, pz);
+                
+                // Update scattered position (offset from animated position)
+                // Keep the relative offset from original
+                const ox = p.sx - p.cx;
+                const oy = p.sy - p.cy;
+                const oz = p.sz - p.cz;
+                scatteredPositions.setXYZ(i, px + ox, py + oy, pz + oz);
+            }
+            
+            positions.needsUpdate = true;
+            scatteredPositions.needsUpdate = true;
+            skeletonUpdateCount++;
+            if (skeletonUpdateCount === 1) {
+                console.log('First skeleton update complete, particles:', particleBaseData.length);
+                // Debug: log first few particle positions
+                console.log('Sample positions after transform:');
+                for (let j = 0; j < Math.min(5, particleBaseData.length); j++) {
+                    console.log(`  Particle ${j}: pos=(${positions.getX(j).toFixed(3)}, ${positions.getY(j).toFixed(3)}, ${positions.getZ(j).toFixed(3)})`);
+                }
+                console.log('Normalization params used:', { cx, cy, cz, scale });
+                // Debug: show raw mesh position vs bone-transformed
+                if (skinnedMesh && skinnedMesh.geometry.attributes.position) {
+                    const meshPos = skinnedMesh.geometry.attributes.position;
+                    console.log('Mesh positions vs bone-transformed (first 3):');
+                    for (let j = 0; j < 3; j++) {
+                        const rawX = meshPos.getX(j), rawY = meshPos.getY(j), rawZ = meshPos.getZ(j);
+                        const testVec = new THREE.Vector3(rawX, rawY, rawZ);
+                        skinnedMesh.applyBoneTransform(j, testVec);
+                        console.log(`  Vertex ${j}: raw=(${rawX.toFixed(3)}, ${rawY.toFixed(3)}, ${rawZ.toFixed(3)}) -> bone=(${testVec.x.toFixed(3)}, ${testVec.y.toFixed(3)}, ${testVec.z.toFixed(3)})`);
+                    }
+                }
+            }
+        }
+        
+        // Assembly/Disassembly functions
+        // Assembly state
+        let targetAssemblyProgress = 1.0;
+        
+        function disassemble() {
+            console.log('Disassemble called');
+            if (!pointsMesh) { console.log('No pointsMesh!'); return; }
+            isAssembled = false;
+            targetAssemblyProgress = 0.0;
+            pointsMesh.material.uniforms.isDisassembling.value = 1.0;
+            console.log('targetAssemblyProgress set to', targetAssemblyProgress);
+            document.getElementById('status').textContent = 'Disassembling...';
+        }
+        
+        function assemble() {
+            if (!pointsMesh) return;
+            isAssembled = true;
+            targetAssemblyProgress = 1.0;
+            pointsMesh.material.uniforms.isDisassembling.value = 0.0;
+            document.getElementById('status').textContent = 'Assembling...';
+        }
+        
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            time += delta;
+            
+            // Update animation mixer for skinned mesh
+            if (mixer) {
+                mixer.update(delta);
+                
+                // Update skeleton - GPU skinning handles the rest in shader
+                if (skinnedMesh && skinnedMesh.skeleton) {
+                    skinnedMesh.skeleton.update();
+                    
+                    // CPU fallback only if GPU skinning not enabled
+                    if (!gpuSkinningEnabled && pointsMesh && particleBaseData.length > 0) {
+                        updateParticlesFromSkeleton();
+                    }
+                }
+            }
+            
+            if (pointsMesh) {
+                const uniforms = pointsMesh.material.uniforms;
+                uniforms.time.value = time;
+                
+                const dir = new THREE.Vector3();
+                camera.getWorldDirection(dir);
+                uniforms.cameraDir.value.copy(dir);
+                uniforms.cameraPos.value.copy(camera.position);
+                
+                // Handle assembly/disassembly animation via shader uniform
+                const currentProgress = uniforms.assemblyProgress.value;
+                const diff = targetAssemblyProgress - currentProgress;
+                if (Math.abs(diff) > 0.001) {
+                    // Duration in seconds: ~60fps, so speed = 1 / (seconds * 60)
+                    const framesNeeded = settings.assemblyDuration * 60;
+                    const speed = 1.0 / framesNeeded;
+                    uniforms.assemblyProgress.value += Math.sign(diff) * speed;
+                    
+                    // Update status when animation completes
+                    if (Math.abs(diff) < 0.01) {
+                        if (isAssembled) {
+                            document.getElementById('status').textContent = `${particleBaseData.length.toLocaleString()} particles`;
+                        } else {
+                            document.getElementById('status').textContent = 'Disassembled';
+                        }
+                    }
+                }
+            }
+            
+            // Head animation
+            if (headAnimationEnabled && modelGroup) {
+                // Subtle left/right rotation
+                modelGroup.rotation.y = Math.sin(time * 0.3) * 0.15;
+                // Subtle up/down nod
+                modelGroup.rotation.x = Math.sin(time * 0.2) * 0.05;
+                // Subtle forward/back movement
+                modelGroup.position.z = Math.sin(time * 0.15) * 0.1;
+            }
+            
+            bloomPass.strength = settings.glow / 100;
+            controls.update();
+            composer.render();
+        }
+        animate();
+        
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Toggle controls
+        document.getElementById('toggleBtn').addEventListener('click', () => {
+            document.getElementById('controls').classList.toggle('hidden');
+        });
+        
+        // Assembly buttons
+        document.getElementById('disassembleBtn').addEventListener('click', disassemble);
+        document.getElementById('assembleBtn').addEventListener('click', assemble);
+        
+        // Model selector
+        document.getElementById('modelSelect').addEventListener('change', (e) => {
+            loadModel(e.target.value);
+        });
+        
+        // Head animation toggle
+        document.getElementById('animateBtn').addEventListener('click', () => {
+            headAnimationEnabled = !headAnimationEnabled;
+            const btn = document.getElementById('animateBtn');
+            btn.textContent = headAnimationEnabled ? '🎭 Stop' : '🎭 Animate';
+            btn.style.background = headAnimationEnabled ? 'rgba(100,255,100,0.3)' : '';
+            
+            // Reset position when stopping
+            if (!headAnimationEnabled && modelGroup) {
+                modelGroup.rotation.set(0, 0, 0);
+                modelGroup.position.set(0, 0, 0);
+            }
+        });
+        
+        // Save defaults
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            // Gather all current values
+            settings.size = parseFloat(document.getElementById('size').value);
+            settings.sizeMin = parseFloat(document.getElementById('sizeMin').value);
+            settings.sizeMax = parseFloat(document.getElementById('sizeMax').value);
+            settings.density = parseFloat(document.getElementById('density').value);
+            settings.densityMin = parseFloat(document.getElementById('densityMin').value);
+            settings.densityMax = parseFloat(document.getElementById('densityMax').value);
+            settings.scatter = parseFloat(document.getElementById('scatter').value);
+            settings.volumeDensity = parseFloat(document.getElementById('volumeDensity').value);
+            settings.volumeDensityMin = parseFloat(document.getElementById('volumeDensityMin').value);
+            settings.volumeDensityMax = parseFloat(document.getElementById('volumeDensityMax').value);
+            settings.shape = document.getElementById('shape').value;
+            settings.reference = document.getElementById('reference').value;
+            settings.effectStart = parseFloat(document.getElementById('effectStart').value);
+            settings.effectStartMin = parseFloat(document.getElementById('effectStartMin').value);
+            settings.effectStartMax = parseFloat(document.getElementById('effectStartMax').value);
+            settings.dissipation = parseFloat(document.getElementById('dissipation').value);
+            settings.dissipationMin = parseFloat(document.getElementById('dissipationMin').value);
+            settings.dissipationMax = parseFloat(document.getElementById('dissipationMax').value);
+            settings.falloffCurve = document.getElementById('falloffCurve').value;
+            settings.floatAway = parseFloat(document.getElementById('floatAway').value);
+            settings.floatAwayMin = parseFloat(document.getElementById('floatAwayMin').value);
+            settings.floatAwayMax = parseFloat(document.getElementById('floatAwayMax').value);
+            settings.floatDir = parseFloat(document.getElementById('floatDir').value);
+            settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
+            settings.surfaceFloatMin = parseFloat(document.getElementById('surfaceFloatMin').value);
+            settings.surfaceFloatMax = parseFloat(document.getElementById('surfaceFloatMax').value);
+            settings.surfaceSpeed = parseFloat(document.getElementById('surfaceSpeed').value);
+            settings.surfaceSpeedMin = parseFloat(document.getElementById('surfaceSpeedMin').value);
+            settings.surfaceSpeedMax = parseFloat(document.getElementById('surfaceSpeedMax').value);
+            settings.color = document.getElementById('color').value;
+            settings.glow = parseFloat(document.getElementById('glow').value);
+            settings.glowMin = parseFloat(document.getElementById('glowMin').value);
+            settings.glowMax = parseFloat(document.getElementById('glowMax').value);
+            settings.background = document.getElementById('background').value;
+            
+            localStorage.setItem('stippleHeadSettings', JSON.stringify(settings));
+            alert('Settings saved!');
+        });
+        
+        // Control handlers
+        function setupSlider(id, settingKey, rebuild = false, isShader = true) {
+            const slider = document.getElementById(id);
+            const minInput = document.getElementById(id + 'Min');
+            const maxInput = document.getElementById(id + 'Max');
+            
+            slider.addEventListener('input', () => {
+                settings[settingKey] = parseFloat(slider.value);
+                if (rebuild) {
+                    initParticles();
+                } else if (isShader && pointsMesh) {
+                    const val = settingKey === 'glow' ? settings[settingKey] / 100 : settings[settingKey] / 100;
+                    if (pointsMesh.material.uniforms[settingKey]) {
+                        pointsMesh.material.uniforms[settingKey].value = val;
+                    }
+                }
+            });
+            
+            if (minInput) {
+                minInput.addEventListener('change', () => {
+                    slider.min = minInput.value;
+                    settings[settingKey + 'Min'] = parseFloat(minInput.value);
+                });
+            }
+            if (maxInput) {
+                maxInput.addEventListener('change', () => {
+                    slider.max = maxInput.value;
+                    settings[settingKey + 'Max'] = parseFloat(maxInput.value);
+                });
+            }
+        }
+        
+        setupSlider('size', 'size', true, false);
+        setupSlider('density', 'density', true, false);
+        
+        // Scatter slider (real-time blend via shader uniform)
+        document.getElementById('scatter').addEventListener('input', (e) => {
+            settings.scatter = parseFloat(e.target.value);
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.scatter.value = settings.scatter / 100;
+            }
+        });
+        
+        setupSlider('volumeDensity', 'volumeDensity', true, false);
+        setupSlider('effectStart', 'effectStart', false, true);
+        setupSlider('dissipation', 'dissipation', false, true);
+        setupSlider('floatAway', 'floatAway', false, true);
+        
+        // Float direction slider (no min/max inputs)
+        document.getElementById('floatDir').addEventListener('input', (e) => {
+            settings.floatDir = parseFloat(e.target.value);
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.floatDir.value = settings.floatDir / 100;
+            }
+        });
+        setupSlider('surfaceFloat', 'surfaceFloat', false, true);
+        setupSlider('surfaceSpeed', 'surfaceSpeed', false, true);
+        setupSlider('glow', 'glow', false, false);
+        
+        document.getElementById('shape').addEventListener('change', (e) => {
+            settings.shape = e.target.value;
+            createMesh();
+        });
+        
+        document.getElementById('reference').addEventListener('change', (e) => {
+            settings.reference = e.target.value;
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.reference.value = settings.reference === 'camera' ? 1 : 0;
+            }
+        });
+        
+        document.getElementById('falloffCurve').addEventListener('change', (e) => {
+            settings.falloffCurve = e.target.value;
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.falloffCurve.value = getFalloffCurveIndex();
+            }
+        });
+        
+        document.getElementById('color').addEventListener('input', (e) => {
+            settings.color = e.target.value;
+            if (pointsMesh) pointsMesh.material.uniforms.color.value = new THREE.Color(settings.color);
+        });
+        
+        document.getElementById('background').addEventListener('change', (e) => {
+            settings.background = e.target.value;
+            scene.background = new THREE.Color(settings.background === 'dark' ? 0x1a1a2e : 0xf5f5f5);
+        });
+        
+        // Assembly animation sliders
+        document.getElementById('assemblyDuration').addEventListener('input', (e) => {
+            settings.assemblyDuration = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('assemblyDirection').addEventListener('change', (e) => {
+            settings.assemblyDirection = e.target.value;
+            if (pointsMesh) {
+                // 0 = back, 1 = above, 2 = below
+                const dirMap = { back: 0, above: 1, below: 2 };
+                pointsMesh.material.uniforms.assemblyDirection.value = dirMap[settings.assemblyDirection];
+            }
+        });
+        
+        document.getElementById('assemblyEasing').addEventListener('change', (e) => {
+            settings.assemblyEasing = e.target.value;
+            if (pointsMesh) {
+                // 0 = uniform, 1 = random-type, 2 = random-intensity, 3 = random-overshoot
+                const easingMap = { 'uniform': 0, 'random-type': 1, 'random-intensity': 2, 'random-overshoot': 3 };
+                pointsMesh.material.uniforms.assemblyEasing.value = easingMap[settings.assemblyEasing];
+            }
+        });
+        
+        document.getElementById('assemblyFadeEasing').addEventListener('change', (e) => {
+            settings.assemblyFadeEasing = e.target.value;
+            if (pointsMesh) {
+                // 0 = linear, 1 = ease-in, 2 = ease-out, 3 = ease-in-out
+                const fadeEasingMap = { 'linear': 0, 'ease-in': 1, 'ease-out': 2, 'ease-in-out': 3 };
+                pointsMesh.material.uniforms.assemblyFadeEasing.value = fadeEasingMap[settings.assemblyFadeEasing];
+            }
+        });
+        
+        ['assemblySpread', 'assemblyDirRandom', 'assemblyTurbulence', 'assemblyBackDelay', 'assemblyFrontDelay', 'assemblyRandomTime', 'assemblyFalloff', 'assemblyDurationSpread', 'assemblyBouncePercent', 'assemblyBounceStrength'].forEach(id => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                settings[id] = parseFloat(e.target.value);
+                if (pointsMesh) {
+                    pointsMesh.material.uniforms[id].value = settings[id] / 100;
+                }
+            });
+        });
+        
+        document.getElementById('assemblyDistance').addEventListener('input', (e) => {
+            settings.assemblyDistance = parseFloat(e.target.value);
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.assemblyDistance.value = settings.assemblyDistance / 10;
+            }
+        });
+        
+        document.getElementById('assemblyDistanceMin').addEventListener('change', (e) => {
+            const slider = document.getElementById('assemblyDistance');
+            slider.min = e.target.value;
+            settings.assemblyDistanceMin = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('assemblyDistanceMax').addEventListener('change', (e) => {
+            const slider = document.getElementById('assemblyDistance');
+            slider.max = e.target.value;
+            settings.assemblyDistanceMax = parseFloat(e.target.value);
+        });
+    </script>
+</body>
+</html>

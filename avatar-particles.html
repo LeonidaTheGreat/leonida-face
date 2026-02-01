@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leonida Avatar - Animated Particles</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #fff;
+        }
+        #container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        .status {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.8em;
+            color: rgba(100, 150, 255, 0.5);
+            letter-spacing: 0.1em;
+            z-index: 10;
+        }
+        
+        .toggle-btn {
+            background: rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+        .toggle-btn:hover { background: rgba(50,50,80,0.9); }
+        
+        #toggleBtn { position: fixed; top: 10px; right: 10px; z-index: 20; }
+        
+        .assembly-controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 20;
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+        }
+        
+        .controls {
+            position: fixed;
+            top: 45px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+            background: rgba(0,0,0,0.85);
+            padding: 12px;
+            border-radius: 8px;
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+            width: 260px;
+            font-size: 0.7em;
+        }
+        .controls.hidden { display: none; }
+        .controls h3 {
+            font-size: 0.85em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.4);
+            margin-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 8px;
+        }
+        .controls h3:first-child { margin-top: 0; border-top: none; padding-top: 0; }
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            margin-bottom: 6px;
+        }
+        .slider-row label { color: rgba(255,255,255,0.7); }
+        .slider-row input[type="range"] {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+        .slider-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #00ffff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .slider-row select, .slider-row input[type="color"] {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            padding: 4px;
+            border-radius: 4px;
+            width: 100%;
+        }
+        .range-inputs {
+            display: flex;
+            gap: 4px;
+            font-size: 0.8em;
+        }
+        .range-inputs input {
+            width: 50px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .anim-info {
+            font-size: 0.75em;
+            color: rgba(255,255,255,0.5);
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+    
+    <div class="assembly-controls">
+        <button class="toggle-btn" onclick="disassemble()">Disassemble</button>
+        <button class="toggle-btn" onclick="assemble()">Assemble</button>
+    </div>
+    
+    <button id="toggleBtn" class="toggle-btn" onclick="toggleControls()">☰ Controls</button>
+    
+    <div class="controls" id="controls">
+        <h3>Animation</h3>
+        
+        <div class="slider-row">
+            <label>Current Animation</label>
+            <select id="animationSelect"></select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Animation Speed</label>
+            <input type="range" id="animSpeed" min="0" max="200" value="100">
+        </div>
+        
+        <div class="slider-row">
+            <label>Auto-blend Idle Animations</label>
+            <select id="autoBlend">
+                <option value="off">Off</option>
+                <option value="on" selected>On</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Blend Interval (seconds)</label>
+            <input type="range" id="blendInterval" min="3" max="20" value="8">
+        </div>
+        
+        <div class="anim-info" id="animInfo">Loading...</div>
+        
+        <h3>Particles</h3>
+        
+        <div class="slider-row">
+            <label>Density</label>
+            <input type="range" id="density" min="1" max="1000" value="500">
+        </div>
+        
+        <div class="slider-row">
+            <label>Size</label>
+            <input type="range" id="size" min="0.05" max="1" value="0.1" step="0.01">
+        </div>
+        
+        <div class="slider-row">
+            <label>Color</label>
+            <input type="color" id="color" value="#00ffff">
+        </div>
+        
+        <div class="slider-row">
+            <label>Glow</label>
+            <input type="range" id="glow" min="0" max="300" value="100">
+        </div>
+        
+        <h3>Assembly Effect</h3>
+        
+        <div class="slider-row">
+            <label>Fly Direction</label>
+            <select id="assemblyDirection">
+                <option value="back">Back (away from camera)</option>
+                <option value="above">Above</option>
+                <option value="below">Below</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Direction Spread</label>
+            <input type="range" id="assemblySpread" min="0" max="100" value="20">
+        </div>
+        
+        <div class="slider-row">
+            <label>Direction Randomness</label>
+            <input type="range" id="assemblyDirRandom" min="0" max="100" value="30">
+        </div>
+        
+        <div class="slider-row">
+            <label>Turbulence</label>
+            <input type="range" id="assemblyTurbulence" min="0" max="100" value="40">
+        </div>
+        
+        <div class="slider-row">
+            <label>Animation Duration (s)</label>
+            <input type="range" id="assemblyDuration" min="0.5" max="10" value="3" step="0.5">
+        </div>
+        
+        <div class="slider-row">
+            <label>Duration Spread</label>
+            <input type="range" id="assemblyDurationSpread" min="0" max="100" value="50">
+        </div>
+        
+        <div class="slider-row">
+            <label>Fly Distance</label>
+            <input type="range" id="assemblyDistance" min="1" max="100" value="50">
+        </div>
+        
+        <div class="slider-row">
+            <label>Easing Mode</label>
+            <select id="assemblyEasing">
+                <option value="uniform">Uniform (Smooth)</option>
+                <option value="random-type" selected>Random Type</option>
+                <option value="random-intensity">Random Intensity</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Bounce Particles (%)</label>
+            <input type="range" id="assemblyBouncePercent" min="0" max="100" value="50">
+        </div>
+        
+        <div class="slider-row">
+            <label>Bounce Strength</label>
+            <input type="range" id="assemblyBounceStrength" min="0" max="100" value="40">
+        </div>
+        
+        <h3>Ambient Motion</h3>
+        
+        <div class="slider-row">
+            <label>Float Amount</label>
+            <input type="range" id="floatAway" min="0" max="100" value="20">
+        </div>
+        
+        <div class="slider-row">
+            <label>Surface Float</label>
+            <input type="range" id="surfaceFloat" min="0" max="100" value="10">
+        </div>
+        
+        <h3>View</h3>
+        
+        <div class="slider-row">
+            <label>Show Mesh</label>
+            <select id="showMesh">
+                <option value="off" selected>Off</option>
+                <option value="wireframe">Wireframe</option>
+                <option value="solid">Solid</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Background</label>
+            <select id="background">
+                <option value="dark" selected>Dark</option>
+                <option value="light">Light</option>
+            </select>
+        </div>
+    </div>
+    
+    <div class="status" id="status">Loading model...</div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // === SCENE SETUP ===
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.2, 3);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.getElementById('container').appendChild(renderer.domElement);
+        
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.0, 0.4, 0.85
+        );
+        composer.addPass(bloomPass);
+        
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1, 0);
+        controls.enableDamping = true;
+        
+        // Lights
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        keyLight.position.set(3, 5, 3);
+        scene.add(keyLight);
+
+        // === STATE ===
+        let skinnedMesh = null;
+        let mixer = null;
+        let animations = [];
+        let idleAnimations = [];
+        let currentAction = null;
+        let pointsMesh = null;
+        let particleData = null;
+        
+        // Settings
+        const settings = {
+            density: 500,
+            size: 0.1,
+            color: '#00ffff',
+            glow: 1.0,
+            animSpeed: 1.0,
+            autoBlend: true,
+            blendInterval: 8,
+            assemblyDirection: 'back',
+            assemblySpread: 0.2,
+            assemblyDirRandom: 0.3,
+            assemblyTurbulence: 0.4,
+            assemblyDuration: 3,
+            assemblyDurationSpread: 0.5,
+            assemblyDistance: 5,
+            assemblyEasing: 1, // random-type
+            assemblyBouncePercent: 0.5,
+            assemblyBounceStrength: 0.4,
+            floatAway: 0.2,
+            surfaceFloat: 0.1,
+            showMesh: 'off',
+            background: 'dark'
+        };
+        
+        // Assembly state
+        let isAssembled = true;
+        let assemblyProgress = 1.0;
+        let targetAssembly = 1.0;
+        let isDisassembling = false;
+        
+        // Animation blending
+        let lastBlendTime = 0;
+        let nextBlendTime = 0;
+
+        // === LOAD MODEL ===
+        const loader = new GLTFLoader();
+        loader.load('models/meshy_merged_animations.glb', (gltf) => {
+            const model = gltf.scene;
+            scene.add(model);
+            
+            // Find skinned mesh
+            model.traverse((child) => {
+                if (child.isSkinnedMesh) {
+                    skinnedMesh = child;
+                    skinnedMesh.visible = false;
+                    console.log('Skinned mesh:', child.geometry.attributes.position.count, 'vertices');
+                }
+            });
+            
+            // Setup animations
+            mixer = new THREE.AnimationMixer(model);
+            animations = gltf.animations;
+            
+            // Find idle animations
+            idleAnimations = animations.filter(a => 
+                a.name.toLowerCase().includes('idle') || 
+                a.name.toLowerCase().includes('breathe') ||
+                a.name.toLowerCase().includes('look')
+            );
+            
+            // Populate dropdown
+            const select = document.getElementById('animationSelect');
+            animations.forEach((clip, i) => {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = clip.name;
+                if (clip.name.includes('Idle_03')) opt.selected = true;
+                select.appendChild(opt);
+            });
+            
+            // Play initial
+            const initial = animations.find(a => a.name.includes('Idle_03')) || animations[0];
+            playAnimation(initial);
+            
+            // Create particles
+            createParticles();
+            
+            // Setup auto-blend
+            nextBlendTime = settings.blendInterval;
+            
+            updateStatus();
+            
+        }, (p) => {
+            if (p.total) {
+                document.getElementById('status').textContent = `Loading... ${(p.loaded/p.total*100).toFixed(0)}%`;
+            }
+        }, (err) => {
+            console.error('Load error:', err);
+            document.getElementById('status').textContent = 'Error loading model!';
+        });
+
+        // === ANIMATION ===
+        function playAnimation(clip, fadeTime = 0.5) {
+            if (currentAction) {
+                currentAction.fadeOut(fadeTime);
+            }
+            currentAction = mixer.clipAction(clip);
+            currentAction.reset().fadeIn(fadeTime).play();
+            currentAction.timeScale = settings.animSpeed;
+            
+            document.getElementById('animInfo').textContent = `Playing: ${clip.name} (${clip.duration.toFixed(1)}s)`;
+        }
+        
+        function blendToRandomIdle() {
+            if (idleAnimations.length < 2) return;
+            
+            // Pick a different animation
+            let next;
+            do {
+                next = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+            } while (currentAction && next.name === currentAction.getClip().name && idleAnimations.length > 1);
+            
+            playAnimation(next, 1.0); // Longer fade for smooth blend
+        }
+
+        // === PARTICLES ===
+        function createParticles() {
+            if (!skinnedMesh) return;
+            
+            // Remove old
+            if (pointsMesh) {
+                scene.remove(pointsMesh);
+                pointsMesh.geometry.dispose();
+                pointsMesh.material.dispose();
+            }
+            
+            const geo = skinnedMesh.geometry;
+            const vertexCount = geo.attributes.position.count;
+            const particleCount = Math.min(settings.density * 100, vertexCount);
+            
+            // Sample vertices
+            const indices = [];
+            for (let i = 0; i < particleCount; i++) {
+                indices.push(Math.floor(Math.random() * vertexCount));
+            }
+            
+            // Create arrays
+            const positions = new Float32Array(particleCount * 3);
+            const seeds = new Float32Array(particleCount * 4);
+            const scatterDirs = new Float32Array(particleCount * 3);
+            const sizes = new Float32Array(particleCount);
+            
+            for (let i = 0; i < particleCount; i++) {
+                // Random seeds
+                seeds[i * 4] = Math.random();
+                seeds[i * 4 + 1] = Math.random();
+                seeds[i * 4 + 2] = Math.random();
+                seeds[i * 4 + 3] = Math.random();
+                
+                // Scatter direction
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                scatterDirs[i * 3] = Math.sin(phi) * Math.cos(theta);
+                scatterDirs[i * 3 + 1] = Math.sin(phi) * Math.sin(theta);
+                scatterDirs[i * 3 + 2] = Math.cos(phi);
+                
+                // Size variation
+                sizes[i] = settings.size * (0.5 + Math.random() * 0.5);
+            }
+            
+            // Store data
+            particleData = { indices, positions, seeds, scatterDirs, sizes, count: particleCount };
+            
+            // Create geometry
+            const particleGeo = new THREE.BufferGeometry();
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            
+            // Shader material
+            const particleMat = new THREE.ShaderMaterial({
+                uniforms: {
+                    color: { value: new THREE.Color(settings.color) },
+                    time: { value: 0 },
+                    opacity: { value: 0.9 }
+                },
+                vertexShader: `
+                    attribute float size;
+                    varying float vAlpha;
+                    void main() {
+                        vAlpha = 1.0;
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = size * (300.0 / -mvPosition.z);
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 color;
+                    uniform float opacity;
+                    varying float vAlpha;
+                    void main() {
+                        vec2 center = gl_PointCoord - vec2(0.5);
+                        float dist = length(center);
+                        if (dist > 0.5) discard;
+                        float alpha = smoothstep(0.5, 0.2, dist) * opacity * vAlpha;
+                        gl_FragColor = vec4(color, alpha);
+                    }
+                `,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            pointsMesh = new THREE.Points(particleGeo, particleMat);
+            scene.add(pointsMesh);
+        }
+        
+        function updateParticles(time, delta) {
+            if (!skinnedMesh || !pointsMesh || !particleData) return;
+            
+            // Update skeleton
+            skinnedMesh.skeleton.update();
+            
+            const geo = skinnedMesh.geometry;
+            const posAttr = geo.attributes.position;
+            const skinIdxAttr = geo.attributes.skinIndex;
+            const skinWgtAttr = geo.attributes.skinWeight;
+            const skeleton = skinnedMesh.skeleton;
+            const boneMatrices = skeleton.boneMatrices;
+            const bindMatrix = skinnedMesh.bindMatrix;
+            
+            const v = new THREE.Vector3();
+            const s = new THREE.Vector3();
+            const t = new THREE.Vector3();
+            const bm = new THREE.Matrix4();
+            
+            // Assembly animation
+            const assemblySpeed = 1.0 / (settings.assemblyDuration * 60);
+            if (Math.abs(assemblyProgress - targetAssembly) > 0.001) {
+                assemblyProgress += Math.sign(targetAssembly - assemblyProgress) * assemblySpeed;
+                assemblyProgress = Math.max(0, Math.min(1, assemblyProgress));
+            }
+            
+            const scatter = 1.0 - assemblyProgress;
+            
+            for (let i = 0; i < particleData.count; i++) {
+                const idx = particleData.indices[i];
+                const seed = particleData.seeds[i * 4];
+                const seed2 = particleData.seeds[i * 4 + 1];
+                const seed3 = particleData.seeds[i * 4 + 2];
+                const seed4 = particleData.seeds[i * 4 + 3];
+                
+                // Get skinned position
+                v.fromBufferAttribute(posAttr, idx).applyMatrix4(bindMatrix);
+                
+                const si = new THREE.Vector4().fromBufferAttribute(skinIdxAttr, idx);
+                const sw = new THREE.Vector4().fromBufferAttribute(skinWgtAttr, idx);
+                
+                s.set(0, 0, 0);
+                for (let j = 0; j < 4; j++) {
+                    const w = sw.getComponent(j);
+                    if (w === 0) continue;
+                    bm.fromArray(boneMatrices, si.getComponent(j) * 16);
+                    t.copy(v).applyMatrix4(bm).multiplyScalar(w);
+                    s.add(t);
+                }
+                s.applyMatrix4(skinnedMesh.matrixWorld);
+                
+                // Target position (on mesh)
+                let x = s.x;
+                let y = s.y;
+                let z = s.z;
+                
+                // Apply scatter
+                if (scatter > 0.01) {
+                    const dist = settings.assemblyDistance * (0.5 + seed4 * 0.5);
+                    
+                    // Get scatter direction
+                    let dx = particleData.scatterDirs[i * 3];
+                    let dy = particleData.scatterDirs[i * 3 + 1];
+                    let dz = particleData.scatterDirs[i * 3 + 2];
+                    
+                    // Mix with directional based on settings
+                    if (settings.assemblyDirection === 'above') {
+                        dy = dy * settings.assemblyDirRandom + (1 - settings.assemblyDirRandom);
+                    } else if (settings.assemblyDirection === 'below') {
+                        dy = dy * settings.assemblyDirRandom - (1 - settings.assemblyDirRandom);
+                    } else {
+                        dz = dz * settings.assemblyDirRandom + (1 - settings.assemblyDirRandom);
+                    }
+                    
+                    // Normalize
+                    const len = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                    dx /= len; dy /= len; dz /= len;
+                    
+                    // Per-particle timing
+                    const startDelay = seed * settings.assemblyDurationSpread * 0.5;
+                    const adjustedScatter = Math.max(0, (scatter - startDelay) / (1 - startDelay));
+                    
+                    // Easing with bounce
+                    let ease = adjustedScatter;
+                    if (settings.assemblyBouncePercent > seed2) {
+                        // Elastic bounce
+                        if (isDisassembling) {
+                            // Pull back then spring
+                            const pullback = 0.1 * settings.assemblyBounceStrength;
+                            if (ease < 0.15) {
+                                ease = -pullback * Math.sin(ease / 0.15 * Math.PI / 2);
+                            } else {
+                                const t2 = (ease - 0.15) / 0.85;
+                                ease = -pullback * (1 - t2) + t2;
+                            }
+                        } else {
+                            // Elastic landing
+                            const freq = 2 + settings.assemblyBounceStrength * 2;
+                            ease = 1 - Math.pow(2, -10 * (1 - ease)) * Math.cos((1 - ease) * Math.PI * freq);
+                            ease = 1 - ease; // Invert for scatter
+                        }
+                    } else {
+                        ease = ease * ease * (3 - 2 * ease); // Smooth step
+                    }
+                    
+                    // Apply offset
+                    const offset = dist * ease;
+                    x += dx * offset;
+                    y += dy * offset;
+                    z += dz * offset;
+                    
+                    // Turbulence during transition
+                    if (ease > 0.05 && ease < 0.95) {
+                        const turb = settings.assemblyTurbulence * (1 - Math.abs(ease - 0.5) * 2);
+                        x += Math.sin(time * 3 + seed * 10) * turb * 0.2;
+                        y += Math.cos(time * 2.5 + seed2 * 10) * turb * 0.2;
+                        z += Math.sin(time * 2.8 + seed3 * 10) * turb * 0.2;
+                    }
+                }
+                
+                // Ambient float (when assembled)
+                if (assemblyProgress > 0.5) {
+                    const floatAmt = settings.floatAway * assemblyProgress * 0.1;
+                    x += Math.sin(time * 0.5 + seed * 6.28) * floatAmt;
+                    y += Math.cos(time * 0.4 + seed2 * 6.28) * floatAmt;
+                    z += Math.sin(time * 0.45 + seed3 * 6.28) * floatAmt;
+                    
+                    // Surface float
+                    const surfAmt = settings.surfaceFloat * assemblyProgress * 0.02;
+                    x += Math.sin(time + seed * 10) * surfAmt;
+                    y += Math.sin(time * 1.1 + seed2 * 10) * surfAmt;
+                    z += Math.sin(time * 0.9 + seed3 * 10) * surfAmt;
+                }
+                
+                particleData.positions[i * 3] = x;
+                particleData.positions[i * 3 + 1] = y;
+                particleData.positions[i * 3 + 2] = z;
+            }
+            
+            pointsMesh.geometry.attributes.position.array = particleData.positions;
+            pointsMesh.geometry.attributes.position.needsUpdate = true;
+        }
+
+        // === ANIMATION LOOP ===
+        const clock = new THREE.Clock();
+        let time = 0;
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            time += delta;
+            
+            // Update mixer
+            if (mixer) mixer.update(delta);
+            
+            // Auto-blend idle animations
+            if (settings.autoBlend && isAssembled && time > nextBlendTime) {
+                blendToRandomIdle();
+                nextBlendTime = time + settings.blendInterval + Math.random() * 4;
+            }
+            
+            // Update particles
+            updateParticles(time, delta);
+            
+            // Update uniforms
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.time.value = time;
+            }
+            
+            controls.update();
+            composer.render();
+        }
+        animate();
+
+        // === CONTROLS ===
+        window.disassemble = function() {
+            isAssembled = false;
+            isDisassembling = true;
+            targetAssembly = 0;
+        };
+        
+        window.assemble = function() {
+            isAssembled = true;
+            isDisassembling = false;
+            targetAssembly = 1;
+        };
+        
+        window.toggleControls = function() {
+            document.getElementById('controls').classList.toggle('hidden');
+        };
+        
+        function updateStatus() {
+            if (particleData) {
+                document.getElementById('status').textContent = 
+                    `${particleData.count.toLocaleString()} particles | ${animations.length} animations | ${idleAnimations.length} idle`;
+            }
+        }
+
+        // UI handlers
+        document.getElementById('animationSelect').onchange = (e) => {
+            playAnimation(animations[e.target.value]);
+        };
+        
+        document.getElementById('animSpeed').oninput = (e) => {
+            settings.animSpeed = e.target.value / 100;
+            if (currentAction) currentAction.timeScale = settings.animSpeed;
+        };
+        
+        document.getElementById('autoBlend').onchange = (e) => {
+            settings.autoBlend = e.target.value === 'on';
+        };
+        
+        document.getElementById('blendInterval').oninput = (e) => {
+            settings.blendInterval = parseInt(e.target.value);
+        };
+        
+        document.getElementById('density').oninput = (e) => {
+            settings.density = parseInt(e.target.value);
+            createParticles();
+            updateStatus();
+        };
+        
+        document.getElementById('size').oninput = (e) => {
+            settings.size = parseFloat(e.target.value);
+            if (particleData) {
+                for (let i = 0; i < particleData.count; i++) {
+                    particleData.sizes[i] = settings.size * (0.5 + particleData.seeds[i * 4] * 0.5);
+                }
+                pointsMesh.geometry.attributes.size.array = particleData.sizes;
+                pointsMesh.geometry.attributes.size.needsUpdate = true;
+            }
+        };
+        
+        document.getElementById('color').oninput = (e) => {
+            settings.color = e.target.value;
+            if (pointsMesh) pointsMesh.material.uniforms.color.value.set(settings.color);
+        };
+        
+        document.getElementById('glow').oninput = (e) => {
+            settings.glow = e.target.value / 100;
+            bloomPass.strength = settings.glow;
+        };
+        
+        document.getElementById('assemblyDirection').onchange = (e) => {
+            settings.assemblyDirection = e.target.value;
+        };
+        
+        ['assemblySpread', 'assemblyDirRandom', 'assemblyTurbulence', 'assemblyDurationSpread', 
+         'assemblyBouncePercent', 'assemblyBounceStrength', 'floatAway', 'surfaceFloat'].forEach(id => {
+            document.getElementById(id).oninput = (e) => {
+                settings[id] = parseFloat(e.target.value) / 100;
+            };
+        });
+        
+        document.getElementById('assemblyDuration').oninput = (e) => {
+            settings.assemblyDuration = parseFloat(e.target.value);
+        };
+        
+        document.getElementById('assemblyDistance').oninput = (e) => {
+            settings.assemblyDistance = parseFloat(e.target.value) / 10;
+        };
+        
+        document.getElementById('assemblyEasing').onchange = (e) => {
+            const map = { 'uniform': 0, 'random-type': 1, 'random-intensity': 2 };
+            settings.assemblyEasing = map[e.target.value];
+        };
+        
+        document.getElementById('showMesh').onchange = (e) => {
+            settings.showMesh = e.target.value;
+            if (skinnedMesh) {
+                if (settings.showMesh === 'off') {
+                    skinnedMesh.visible = false;
+                } else {
+                    skinnedMesh.visible = true;
+                    skinnedMesh.material = new THREE.MeshBasicMaterial({
+                        color: 0x334455,
+                        wireframe: settings.showMesh === 'wireframe',
+                        transparent: true,
+                        opacity: 0.3
+                    });
+                }
+            }
+        };
+        
+        document.getElementById('background').onchange = (e) => {
+            settings.background = e.target.value;
+            scene.background = new THREE.Color(settings.background === 'dark' ? 0x1a1a2e : 0xf0f0f0);
+        };
+
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

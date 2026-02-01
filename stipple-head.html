@@ -194,7 +194,7 @@
         </div>
         
         <div class="slider-row">
-            <label>Scatter (0=constellation, 100=spread)</label>
+            <label>Scatter (organized → organic)</label>
             <input type="range" id="scatter" min="0" max="100" value="0">
         </div>
         
@@ -726,7 +726,7 @@
                     
                     const v = allVertices[i];
                     
-                    // CONSTELLATION position: on mesh edges
+                    // CONSTELLATION position: on mesh edges (organized)
                     let cx = v.x, cy = v.y, cz = v.z;
                     if (pass > 0 && vertexEdges[i] && vertexEdges[i].length > 0) {
                         const neighbors = vertexEdges[i];
@@ -738,33 +738,38 @@
                         cz = v.z + (neighbor.z - v.z) * t;
                     }
                     
-                    // SCATTERED position: jittered within local neighborhood
-                    // Pick random nearby vertex and offset randomly toward it
-                    let sx = cx, sy = cy, sz = cz;
-                    const jitterRadius = 0.3; // Maximum scatter distance
+                    // SCATTERED position: local surface jitter (stays near original vertex)
+                    // Start from the same vertex but jitter within local triangle faces
+                    let sx = v.x, sy = v.y, sz = v.z;
                     
-                    // Find a random vertex to scatter toward
-                    const randomVertexIdx = Math.floor(Math.random() * allVertices.length);
-                    const randomVertex = allVertices[randomVertexIdx];
-                    
-                    // Calculate direction from constellation pos to random vertex
-                    const dx = randomVertex.x - cx;
-                    const dy = randomVertex.y - cy;
-                    const dz = randomVertex.z - cz;
-                    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-                    
-                    if (dist > 0.01) {
-                        // Scatter along this direction by a random amount
-                        const scatterDist = jitterRadius * (0.5 + Math.random() * 0.5);
-                        sx = cx + (dx / dist) * scatterDist * (Math.random() * 0.5 + 0.5);
-                        sy = cy + (dy / dist) * scatterDist * (Math.random() * 0.5 + 0.5);
-                        sz = cz + (dz / dist) * scatterDist * (Math.random() * 0.5 + 0.5);
+                    if (vertexEdges[i] && vertexEdges[i].length >= 2) {
+                        const neighbors = vertexEdges[i];
+                        // Pick two random neighbors to form a triangle
+                        const n1 = allVertices[neighbors[Math.floor(Math.random() * neighbors.length)]];
+                        const n2 = allVertices[neighbors[Math.floor(Math.random() * neighbors.length)]];
+                        
+                        // Random barycentric coordinates - favor staying on surface
+                        let u = Math.random();
+                        let w = Math.random();
+                        if (u + w > 1) { u = 1 - u; w = 1 - w; }
+                        const t = 1 - u - w;
+                        
+                        // Interpolate within this local triangle
+                        sx = v.x * t + n1.x * u + n2.x * w;
+                        sy = v.y * t + n1.y * u + n2.y * w;
+                        sz = v.z * t + n1.z * u + n2.z * w;
+                    } else {
+                        // No neighbors - add small tangent jitter
+                        const len = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z) || 1;
+                        const nx = v.x/len, ny = v.y/len, nz = v.z/len;
+                        // Tangent directions
+                        const tx = ny * 0.1 - nz * 0.05;
+                        const ty = nz * 0.1 - nx * 0.05;
+                        const tz = nx * 0.1 - ny * 0.05;
+                        sx = v.x + tx * (Math.random() - 0.5) * 0.5;
+                        sy = v.y + ty * (Math.random() - 0.5) * 0.5;
+                        sz = v.z + tz * (Math.random() - 0.5) * 0.5;
                     }
-                    
-                    // Add small random offset for more organic scatter
-                    sx += (Math.random() - 0.5) * jitterRadius * 0.3;
-                    sy += (Math.random() - 0.5) * jitterRadius * 0.3;
-                    sz += (Math.random() - 0.5) * jitterRadius * 0.3;
                     
                     particleBaseData.push({
                         // Constellation position (organized)
@@ -800,12 +805,13 @@
                     const cy = v1.y + (v2.y - v1.y) * t;
                     const cz = v1.z + (v2.z - v1.z) * t;
                     
-                    // For volume, scattered = more random interior positions
+                    // For volume, scattered = different random interior position
                     const v3 = allVertices[Math.floor(Math.random() * allVertices.length)];
+                    const v4 = allVertices[Math.floor(Math.random() * allVertices.length)];
                     const t2 = Math.random();
-                    const sx = v1.x + (v3.x - v1.x) * t2 + (Math.random() - 0.5) * 0.2;
-                    const sy = v1.y + (v3.y - v1.y) * t2 + (Math.random() - 0.5) * 0.2;
-                    const sz = v1.z + (v3.z - v1.z) * t2 + (Math.random() - 0.5) * 0.2;
+                    const sx = v3.x + (v4.x - v3.x) * t2;
+                    const sy = v3.y + (v4.y - v3.y) * t2;
+                    const sz = v3.z + (v4.z - v3.z) * t2;
                     
                     particleBaseData.push({
                         cx, cy, cz,
@@ -931,7 +937,9 @@
                     
                     void main() {
                         // Blend between constellation (organized) and scattered (organic) positions
-                        vec3 basePosition = mix(constellationPosition, scatteredPosition, scatter);
+                        // Cap at 50% blend - full scatter looks too chaotic
+                        float scatterAmount = scatter * 0.5;
+                        vec3 basePosition = mix(constellationPosition, scatteredPosition, scatterAmount);
                         vec3 pos = basePosition;
                         
                         // === Surface floating for ALL particles ===

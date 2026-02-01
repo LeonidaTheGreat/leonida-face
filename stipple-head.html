@@ -1067,25 +1067,21 @@
                     }
                 });
                 
-                // Validate head bounds
+                // Validate head bounds (only for headSize calculation)
                 if (headBounds.minX === Infinity) {
                     console.warn('No head vertices found, using full bounds');
-                    cx = (bounds.minX + bounds.maxX) / 2;
-                    cy = (bounds.minY + bounds.maxY) / 2;
-                    cz = (bounds.minZ + bounds.maxZ) / 2;
                     headSize = Math.max(modelWidth, modelHeight, modelDepth);
                 } else {
-                    // X and Z: use MODEL center (so rotation axis goes through body center)
-                    // Y: use HEAD center (so heads align at Y=0)
-                    cx = (bounds.minX + bounds.maxX) / 2;  // Model center X
-                    cy = (headBounds.minY + headBounds.maxY) / 2;  // Head center Y
-                    cz = (bounds.minZ + bounds.maxZ) / 2;  // Model center Z
                     headSize = Math.max(
                         headBounds.maxX - headBounds.minX,
                         headBounds.maxY - headBounds.minY,
                         headBounds.maxZ - headBounds.minZ
                     );
                 }
+                // ALL axes use MODEL geometric center (Z-axis through center of model)
+                cx = (bounds.minX + bounds.maxX) / 2;
+                cy = (bounds.minY + bounds.maxY) / 2;
+                cz = (bounds.minZ + bounds.maxZ) / 2;
                 console.log(`Full body: headThreshold=${headThreshold.toFixed(2)}, headSize=${headSize.toFixed(2)}, cx=${cx.toFixed(2)}, cy=${cy.toFixed(2)}, cz=${cz.toFixed(2)}`);
             } else {
                 // Head-only: use full bounds
@@ -1160,23 +1156,19 @@
                     
                     if (headBounds.minX === Infinity) {
                         console.warn('No skeleton head vertices found, using full bounds');
-                        cx = (skelBounds.minX + skelBounds.maxX) / 2;
-                        cy = (skelBounds.minY + skelBounds.maxY) / 2;
-                        cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
                         headSize = Math.max(skelWidth, skelHeight, skelDepth);
                     } else {
-                        // X and Z: use SKELETON center (so rotation axis goes through body center)
-                        // Y: use HEAD center (so heads align at Y=0)
-                        cx = (skelBounds.minX + skelBounds.maxX) / 2;  // Skeleton center X
-                        cy = (headBounds.minY + headBounds.maxY) / 2;  // Head center Y
-                        cz = (skelBounds.minZ + skelBounds.maxZ) / 2;  // Skeleton center Z
                         headSize = Math.max(
                             headBounds.maxX - headBounds.minX,
                             headBounds.maxY - headBounds.minY,
                             headBounds.maxZ - headBounds.minZ
                         );
                     }
-                    console.log('Skeleton head:', { cx, cy, cz, headSize });
+                    // ALL axes use SKELETON geometric center (Z-axis through center of model)
+                    cx = (skelBounds.minX + skelBounds.maxX) / 2;
+                    cy = (skelBounds.minY + skelBounds.maxY) / 2;
+                    cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
+                    console.log('Skeleton center:', { cx, cy, cz, headSize });
                 } else {
                     cx = (skelBounds.minX + skelBounds.maxX) / 2;
                     cy = (skelBounds.minY + skelBounds.maxY) / 2;

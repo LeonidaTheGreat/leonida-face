@@ -1073,14 +1073,15 @@
                 } else {
                     cx = (headBounds.minX + headBounds.maxX) / 2;
                     cy = (headBounds.minY + headBounds.maxY) / 2;
-                    cz = (headBounds.minZ + headBounds.maxZ) / 2;
+                    // Use FULL MODEL Z center for better Z symmetry
+                    cz = (bounds.minZ + bounds.maxZ) / 2;
                     headSize = Math.max(
                         headBounds.maxX - headBounds.minX,
                         headBounds.maxY - headBounds.minY,
                         headBounds.maxZ - headBounds.minZ
                     );
                 }
-                console.log(`Full body: headThreshold=${headThreshold.toFixed(2)}, headSize=${headSize.toFixed(2)}`);
+                console.log(`Full body: headThreshold=${headThreshold.toFixed(2)}, headSize=${headSize.toFixed(2)}, cz(model)=${cz.toFixed(3)}`);
             } else {
                 // Head-only: use full bounds
                 cx = (bounds.minX + bounds.maxX) / 2;
@@ -1152,7 +1153,8 @@
                     } else {
                         cx = (headBounds.minX + headBounds.maxX) / 2;
                         cy = (headBounds.minY + headBounds.maxY) / 2;
-                        cz = (headBounds.minZ + headBounds.maxZ) / 2;
+                        // Use FULL SKELETON Z center for better Z symmetry
+                        cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
                         headSize = Math.max(
                             headBounds.maxX - headBounds.minX,
                             headBounds.maxY - headBounds.minY,

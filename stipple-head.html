@@ -1067,22 +1067,24 @@
                     }
                 });
                 
-                // Validate head bounds (only for headSize calculation)
+                // Validate head bounds
                 if (headBounds.minX === Infinity) {
                     console.warn('No head vertices found, using full bounds');
+                    cx = (bounds.minX + bounds.maxX) / 2;
+                    cy = (bounds.minY + bounds.maxY) / 2;
+                    cz = (bounds.minZ + bounds.maxZ) / 2;
                     headSize = Math.max(modelWidth, modelHeight, modelDepth);
                 } else {
+                    cx = (headBounds.minX + headBounds.maxX) / 2;
+                    cy = (headBounds.minY + headBounds.maxY) / 2;
+                    cz = (headBounds.minZ + headBounds.maxZ) / 2;
                     headSize = Math.max(
                         headBounds.maxX - headBounds.minX,
                         headBounds.maxY - headBounds.minY,
                         headBounds.maxZ - headBounds.minZ
                     );
                 }
-                // ALL axes use MODEL geometric center (Z-axis through center of model)
-                cx = (bounds.minX + bounds.maxX) / 2;
-                cy = (bounds.minY + bounds.maxY) / 2;
-                cz = (bounds.minZ + bounds.maxZ) / 2;
-                console.log(`Full body: headThreshold=${headThreshold.toFixed(2)}, headSize=${headSize.toFixed(2)}, cx=${cx.toFixed(2)}, cy=${cy.toFixed(2)}, cz=${cz.toFixed(2)}`);
+                console.log(`Full body: headThreshold=${headThreshold.toFixed(2)}, headSize=${headSize.toFixed(2)}`);
             } else {
                 // Head-only: use full bounds
                 cx = (bounds.minX + bounds.maxX) / 2;
@@ -1156,19 +1158,21 @@
                     
                     if (headBounds.minX === Infinity) {
                         console.warn('No skeleton head vertices found, using full bounds');
+                        cx = (skelBounds.minX + skelBounds.maxX) / 2;
+                        cy = (skelBounds.minY + skelBounds.maxY) / 2;
+                        cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
                         headSize = Math.max(skelWidth, skelHeight, skelDepth);
                     } else {
+                        cx = (headBounds.minX + headBounds.maxX) / 2;
+                        cy = (headBounds.minY + headBounds.maxY) / 2;
+                        cz = (headBounds.minZ + headBounds.maxZ) / 2;
                         headSize = Math.max(
                             headBounds.maxX - headBounds.minX,
                             headBounds.maxY - headBounds.minY,
                             headBounds.maxZ - headBounds.minZ
                         );
                     }
-                    // ALL axes use SKELETON geometric center (Z-axis through center of model)
-                    cx = (skelBounds.minX + skelBounds.maxX) / 2;
-                    cy = (skelBounds.minY + skelBounds.maxY) / 2;
-                    cz = (skelBounds.minZ + skelBounds.maxZ) / 2;
-                    console.log('Skeleton center:', { cx, cy, cz, headSize });
+                    console.log('Skeleton head:', { cx, cy, cz, headSize });
                 } else {
                     cx = (skelBounds.minX + skelBounds.maxX) / 2;
                     cy = (skelBounds.minY + skelBounds.maxY) / 2;
@@ -1242,30 +1246,10 @@
                 skeletonNormParams.zOffset = zOffset;
             }
             
-            // Auto-zoom camera to frame head + upper torso
-            // Head is at origin. Frame from head down to ~30% of body height below.
-            const normHeight = normBounds.maxY - normBounds.minY;
-            const normWidth = normBounds.maxX - normBounds.minX;
-            
-            // Target slightly below head center to show upper torso
-            const targetY = Math.min(0, normBounds.minY * 0.3); // 30% down toward body
-            
-            // Calculate camera distance to frame head + upper torso
-            // Frame about 40% of model height (head + shoulders)
-            const frameHeight = normHeight * 0.4;
-            const frameWidth = Math.max(normWidth, frameHeight * 0.8); // Ensure width fits
-            
-            // Use FOV to calculate required distance
-            const fov = camera.fov * Math.PI / 180;
-            const distanceForHeight = (frameHeight / 2) / Math.tan(fov / 2);
-            const distanceForWidth = (frameWidth / 2) / Math.tan(fov / 2) / camera.aspect;
-            const cameraZ = Math.max(distanceForHeight, distanceForWidth, 2) * 1.2; // 20% margin
-            
-            camera.position.set(0, targetY, cameraZ);
-            controls.target.set(0, targetY, 0);
+            // Camera at z=3, target origin (head is centered there)
+            camera.position.set(0, 0, 3);
+            controls.target.set(0, 0, 0);
             controls.update();
-            
-            console.log(`Camera auto-zoom: targetY=${targetY.toFixed(2)}, cameraZ=${cameraZ.toFixed(2)}, frameHeight=${frameHeight.toFixed(2)}`);
             
             applySettingsToUI();
             initParticles();

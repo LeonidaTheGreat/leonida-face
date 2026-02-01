@@ -1246,10 +1246,30 @@
                 skeletonNormParams.zOffset = zOffset;
             }
             
-            // Camera always at z=3, target origin (head is centered there)
-            camera.position.set(0, 0, 3);
-            controls.target.set(0, 0, 0);
+            // Auto-zoom camera to frame head + upper torso
+            // Head is at origin. Frame from head down to ~30% of body height below.
+            const modelHeight = normBounds.maxY - normBounds.minY;
+            const modelWidth = normBounds.maxX - normBounds.minX;
+            
+            // Target slightly below head center to show upper torso
+            const targetY = Math.min(0, normBounds.minY * 0.3); // 30% down toward body
+            
+            // Calculate camera distance to frame head + upper torso
+            // Frame about 40% of model height (head + shoulders)
+            const frameHeight = modelHeight * 0.4;
+            const frameWidth = Math.max(modelWidth, frameHeight * 0.8); // Ensure width fits
+            
+            // Use FOV to calculate required distance
+            const fov = camera.fov * Math.PI / 180;
+            const distanceForHeight = (frameHeight / 2) / Math.tan(fov / 2);
+            const distanceForWidth = (frameWidth / 2) / Math.tan(fov / 2) / camera.aspect;
+            const cameraZ = Math.max(distanceForHeight, distanceForWidth, 2) * 1.2; // 20% margin
+            
+            camera.position.set(0, targetY, cameraZ);
+            controls.target.set(0, targetY, 0);
             controls.update();
+            
+            console.log(`Camera auto-zoom: targetY=${targetY.toFixed(2)}, cameraZ=${cameraZ.toFixed(2)}, frameHeight=${frameHeight.toFixed(2)}`);
             
             applySettingsToUI();
             initParticles();
@@ -1686,17 +1706,21 @@
                         pos += radial * floatZ * 0.3; // Tiny bit of in/out breathing
                         
                         // === Depth calculation for dissipation ===
-                        // Transform basePosition to world space for camera-relative calculations
-                        vec3 worldBasePos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
-                        
+                        // Use linear Z-based depth, normalized to model bounds
+                        // This ensures "X% from front" means the same for all models
                         float depth;
                         if (reference == 1) {
-                            // Camera reference - use world-space position
-                            vec3 toPoint = normalize(worldBasePos);
-                            depth = -dot(toPoint, cameraDir);
-                            depth = (depth + 1.0) / 2.0;
+                            // Camera reference - linear Z normalized to model bounds
+                            // depth = 0 at back (minZ), depth = 1 at front (maxZ)
+                            float modelDepth = modelBoundsZ.y - modelBoundsZ.x;
+                            if (modelDepth > 0.001) {
+                                depth = (basePosition.z - modelBoundsZ.x) / modelDepth;
+                            } else {
+                                depth = 0.5;
+                            }
+                            depth = clamp(depth, 0.0, 1.0);
                         } else {
-                            // Model reference - use local space
+                            // Model reference - use local space (legacy)
                             depth = (basePosition.z + 1.0) / 2.0;
                         }
                         

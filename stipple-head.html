@@ -1092,11 +1092,11 @@
             
             scale = HEAD_TARGET_SIZE / headSize;
             
-            // No transformation - use raw mesh coordinates
+            // Center only, no scaling
             allVertices = vertices.map(v => ({
-                x: v.x,
-                y: v.y,
-                z: v.z
+                x: v.x - cx,
+                y: v.y - cy,
+                z: v.z - cz
             }));
             
             // For skinned meshes, we need to compute bounds from bone-transformed positions
@@ -1177,7 +1177,11 @@
             window._debug = { skeletonNormParams, bounds };
             console.log('Final skeletonNormParams:', skeletonNormParams);
             
-            // No mesh transform - mesh stays at original coordinates
+            // Center mesh (no scaling) so it matches particles
+            if (window.gltfScene) {
+                window.gltfScene.position.set(-cx, -cy, -cz);
+                console.log(`GLTF mesh centered: pos=(${-cx.toFixed(3)}, ${-cy.toFixed(3)}, ${-cz.toFixed(3)})`);
+            }
             
             // Camera always at z=3, target origin
             camera.position.set(0, 0, 3);
@@ -1982,7 +1986,8 @@
             const scatteredPositions = geometry.attributes.scatteredPosition;
             if (!positions || !scatteredPositions) return;
             
-            // No normalization - use raw bone-transformed coordinates
+            // Center only, no scaling
+            const { cx, cy, cz } = skeletonNormParams;
             
             for (let i = 0; i < particleBaseData.length; i++) {
                 const p = particleBaseData[i];
@@ -1995,18 +2000,18 @@
                 // Apply bone transformation (modifies _tempVec in place)
                 skinnedMesh.applyBoneTransform(vi, _tempVec);
                 
-                // Use raw transformed position (no centering/scaling)
-                let px = _tempVec.x;
-                let py = _tempVec.y;
-                let pz = _tempVec.z;
+                // Center only (no scaling)
+                let px = _tempVec.x - cx;
+                let py = _tempVec.y - cy;
+                let pz = _tempVec.z - cz;
                 
                 // If this particle interpolates along an edge, blend with neighbor
                 if (p.neighborIndex >= 0 && p.edgeT > 0) {
                     _tempVec2.fromBufferAttribute(meshPositions, p.neighborIndex);
                     skinnedMesh.applyBoneTransform(p.neighborIndex, _tempVec2);
-                    const nx = _tempVec2.x;
-                    const ny = _tempVec2.y;
-                    const nz = _tempVec2.z;
+                    const nx = _tempVec2.x - cx;
+                    const ny = _tempVec2.y - cy;
+                    const nz = _tempVec2.z - cz;
                     
                     px = px + (nx - px) * p.edgeT;
                     py = py + (ny - py) * p.edgeT;

@@ -627,13 +627,14 @@
                     const v = allVertices[i];
                     let x = v.x, y = v.y, z = v.z;
                     
-                    // For oversampled passes, find closest neighbor with max distance cap
+                    // For oversampled passes, find neighbor for constellation effect
                     if (pass > 0) {
-                        const sampleSize = 50;
-                        const maxDistSq = 0.04; // Max distance squared (~0.2 units) to prevent cross-mesh interpolation
+                        const sampleSize = 100;
+                        const maxDistSq = 0.09; // ~0.3 units max distance
                         let closestNeighbor = null;
                         let closestDist = Infinity;
                         
+                        // Sample random vertices to find closest neighbor
                         for (let s = 0; s < sampleSize; s++) {
                             const randomIdx = Math.floor(Math.random() * allVertices.length);
                             if (randomIdx === i) continue;
@@ -642,7 +643,6 @@
                             const dx = n.x - v.x, dy = n.y - v.y, dz = n.z - v.z;
                             const distSq = dx*dx + dy*dy + dz*dz;
                             
-                            // Must be within max distance AND closer than current best
                             if (distSq > 0.0001 && distSq < maxDistSq && distSq < closestDist) {
                                 closestDist = distSq;
                                 closestNeighbor = n;
@@ -650,13 +650,12 @@
                         }
                         
                         if (closestNeighbor) {
-                            // Constellation: interpolate along edge
-                            const t = Math.random(); // Full edge
+                            // Distribute along edge - bias toward middle for constellation lines
+                            const t = 0.1 + Math.random() * 0.8; // 0.1 to 0.9 (avoid endpoints)
                             x = v.x + (closestNeighbor.x - v.x) * t;
                             y = v.y + (closestNeighbor.y - v.y) * t;
                             z = v.z + (closestNeighbor.z - v.z) * t;
                         }
-                        // If no close neighbor, stay at vertex
                     }
                     
                     particleBaseData.push({

@@ -504,11 +504,19 @@
             male: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/obj/male02/male02.obj'
         };
         
-        // Camera settings per model (for full body, zoom out)
+        // Camera settings per model
         const cameraSettings = {
             walt: { z: 3, targetY: 0 },
-            female: { z: 4, targetY: 0.5 },  // Zoom out, focus on upper body
-            male: { z: 4, targetY: 0.5 }
+            female: { z: 3, targetY: 0 },
+            male: { z: 3, targetY: 0 }
+        };
+        
+        // Model-specific normalization settings
+        // For full-body models, we extract the head region and scale to match Walt
+        const modelNormalization = {
+            walt: { type: 'full', headScale: 1.0 },
+            female: { type: 'body', headTopPercent: 0.12, headScale: 2.5 }, // Head is top 12% of model
+            male: { type: 'body', headTopPercent: 0.12, headScale: 2.5 }
         };
         
         let currentModel = 'walt';
@@ -583,7 +591,7 @@
                     vertexEdges.push(edges.has(i) ? Array.from(edges.get(i)) : []);
                 }
                 
-                // Normalize and CENTER at origin
+                // Get full model bounds
                 const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
                 vertices.forEach(v => {
                     bounds.minX = Math.min(bounds.minX, v.x); bounds.maxX = Math.max(bounds.maxX, v.x);
@@ -591,10 +599,44 @@
                     bounds.minZ = Math.min(bounds.minZ, v.z); bounds.maxZ = Math.max(bounds.maxZ, v.z);
                 });
                 
-                const cx = (bounds.minX + bounds.maxX) / 2;
-                const cy = (bounds.minY + bounds.maxY) / 2;
-                const cz = (bounds.minZ + bounds.maxZ) / 2;
-                const scale = 2 / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, bounds.maxZ - bounds.minZ);
+                const normSettings = modelNormalization[modelName] || { type: 'full', headScale: 1.0 };
+                
+                let cx, cy, cz, scale;
+                
+                if (normSettings.type === 'body') {
+                    // For full-body models: center and scale based on head region
+                    const modelHeight = bounds.maxY - bounds.minY;
+                    const headThreshold = bounds.maxY - modelHeight * normSettings.headTopPercent;
+                    
+                    // Get head region bounds
+                    const headBounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity };
+                    vertices.forEach(v => {
+                        if (v.y >= headThreshold) {
+                            headBounds.minX = Math.min(headBounds.minX, v.x); headBounds.maxX = Math.max(headBounds.maxX, v.x);
+                            headBounds.minY = Math.min(headBounds.minY, v.y); headBounds.maxY = Math.max(headBounds.maxY, v.y);
+                            headBounds.minZ = Math.min(headBounds.minZ, v.z); headBounds.maxZ = Math.max(headBounds.maxZ, v.z);
+                        }
+                    });
+                    
+                    // Center on head
+                    cx = (headBounds.minX + headBounds.maxX) / 2;
+                    cy = (headBounds.minY + headBounds.maxY) / 2;
+                    cz = (headBounds.minZ + headBounds.maxZ) / 2;
+                    
+                    // Scale so head is same size as Walt head (which fills ~2 units)
+                    const headSize = Math.max(
+                        headBounds.maxX - headBounds.minX,
+                        headBounds.maxY - headBounds.minY,
+                        headBounds.maxZ - headBounds.minZ
+                    );
+                    scale = 2 / headSize;
+                } else {
+                    // For head-only models: center and scale the whole thing
+                    cx = (bounds.minX + bounds.maxX) / 2;
+                    cy = (bounds.minY + bounds.maxY) / 2;
+                    cz = (bounds.minZ + bounds.maxZ) / 2;
+                    scale = 2 / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, bounds.maxZ - bounds.minZ);
+                }
                 
                 allVertices = vertices.map(v => ({
                     x: (v.x - cx) * scale,
@@ -861,14 +903,17 @@
                         pos += radial * floatZ * 0.3; // Tiny bit of in/out breathing
                         
                         // === Depth calculation for dissipation ===
+                        // Transform basePosition to world space for camera-relative calculations
+                        vec3 worldBasePos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
+                        
                         float depth;
                         if (reference == 1) {
-                            // Camera reference
-                            vec3 toPoint = normalize(basePosition);
+                            // Camera reference - use world-space position
+                            vec3 toPoint = normalize(worldBasePos);
                             depth = -dot(toPoint, cameraDir);
                             depth = (depth + 1.0) / 2.0;
                         } else {
-                            // Model reference
+                            // Model reference - use local space
                             depth = (basePosition.z + 1.0) / 2.0;
                         }
                         
@@ -888,12 +933,16 @@
                         float floatAmount = falloff * floatAway;
                         float anim = sin(time * seeds.z + seeds.x) * 0.5 + 0.5;
                         
-                        // Away from camera = direction camera is looking
-                        vec3 awayDir = cameraDir;
+                        // Away from camera = direction camera is looking (in world space)
+                        // Transform back to local space for position offset
+                        mat3 normalMat = mat3(modelMatrix);
+                        mat3 invNormalMat = inverse(normalMat);
+                        vec3 localCameraDir = normalize(invNormalMat * cameraDir);
+                        vec3 awayDir = localCameraDir;
                         
                         // First: filter out toward-camera component from drift
                         vec3 filteredDrift = drift;
-                        vec3 towardCamera = -cameraDir;
+                        vec3 towardCamera = -localCameraDir;
                         float towardComponent = dot(drift, towardCamera);
                         if (towardComponent > 0.0) {
                             filteredDrift -= towardCamera * towardComponent;

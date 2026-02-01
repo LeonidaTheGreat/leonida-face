@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🦁 Leonida Avatar</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #0d0d1a; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; }
+        
+        #ui {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 300px;
+            height: 100vh;
+            background: linear-gradient(180deg, rgba(20,20,35,0.95) 0%, rgba(15,15,25,0.98) 100%);
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 100;
+            border-right: 1px solid rgba(0,255,255,0.1);
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ffff;
+            margin-bottom: 5px;
+            text-shadow: 0 0 20px rgba(0,255,255,0.5);
+        }
+        .subtitle { color: #666; font-size: 12px; margin-bottom: 20px; }
+        
+        .section {
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .section-title {
+            color: #888;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .control { margin-bottom: 10px; }
+        .control label {
+            display: flex;
+            justify-content: space-between;
+            color: #aaa;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .control .value { color: #00ffff; }
+        .control input[type="range"] {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            background: #333;
+            border-radius: 2px;
+            outline: none;
+        }
+        .control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #00ffff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,255,255,0.5);
+        }
+        .control select {
+            width: 100%;
+            padding: 8px;
+            background: #222;
+            border: 1px solid #333;
+            color: white;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        .control input[type="color"] {
+            width: 100%;
+            height: 32px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        .btn-group { display: flex; gap: 8px; }
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #00ffff 0%, #00cccc 100%);
+            color: #0d0d1a;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(0,255,255,0.3); }
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid #333;
+            color: #888;
+        }
+        .btn-ghost:hover { border-color: #00ffff; color: #00ffff; }
+        .btn-ghost.active { background: rgba(0,255,255,0.1); border-color: #00ffff; color: #00ffff; }
+        
+        #status {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: #00ffff;
+            font-size: 11px;
+            z-index: 100;
+        }
+        
+        #canvas-container {
+            margin-left: 300px;
+            width: calc(100vw - 300px);
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="logo">🦁 Leonida</div>
+        <div class="subtitle">Particle Avatar System</div>
+        
+        <div class="section">
+            <div class="section-title">Animation</div>
+            <div class="control">
+                <select id="animation"></select>
+            </div>
+            <div class="control">
+                <label>Speed <span class="value" id="speedV">1.0×</span></label>
+                <input type="range" id="speed" min="0" max="200" value="100">
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">Assembly</div>
+            <div class="btn-group" style="margin-bottom:12px">
+                <button class="btn btn-primary" id="assembleBtn">⟨ Assemble</button>
+                <button class="btn btn-primary" id="disassembleBtn">Scatter ⟩</button>
+            </div>
+            <div class="control">
+                <label>Duration <span class="value" id="durationV">2.0s</span></label>
+                <input type="range" id="duration" min="50" max="500" value="200">
+            </div>
+            <div class="control">
+                <label>Bounce <span class="value" id="bounceV">30%</span></label>
+                <input type="range" id="bounce" min="0" max="100" value="30">
+            </div>
+            <div class="control">
+                <label>Turbulence <span class="value" id="turbV">20%</span></label>
+                <input type="range" id="turbulence" min="0" max="100" value="20">
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">Particles</div>
+            <div class="control">
+                <label>Count <span class="value" id="countV">15,000</span></label>
+                <input type="range" id="count" min="1000" max="100000" value="15000" step="1000">
+            </div>
+            <div class="control">
+                <label>Size <span class="value" id="sizeV">0.012</span></label>
+                <input type="range" id="size" min="2" max="50" value="12">
+            </div>
+            <div class="control">
+                <label>Color</label>
+                <input type="color" id="color" value="#00ffff">
+            </div>
+            <div class="control">
+                <label>Glow <span class="value" id="glowV">1.5</span></label>
+                <input type="range" id="glow" min="0" max="40" value="15">
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">Ambient Motion</div>
+            <div class="control">
+                <label>Float Amount <span class="value" id="floatV">10%</span></label>
+                <input type="range" id="float" min="0" max="100" value="10">
+            </div>
+            <div class="control">
+                <label>Breathing <span class="value" id="breatheV">5%</span></label>
+                <input type="range" id="breathe" min="0" max="50" value="5">
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">View</div>
+            <div class="btn-group">
+                <button class="btn btn-ghost" id="meshBtn">Mesh</button>
+                <button class="btn btn-ghost active" id="particlesBtn">Particles</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="canvas-container"></div>
+    <div id="status">Loading...</div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        const container = document.getElementById('canvas-container');
+        
+        // Scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0d0d1a);
+        
+        // Camera
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(0, 1.2, 2.5);
+        
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+        
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(container.clientWidth, container.clientHeight),
+            1.5, 0.4, 0.85
+        );
+        composer.addPass(bloomPass);
+        
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1, 0);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        keyLight.position.set(3, 5, 3);
+        scene.add(keyLight);
+        const fillLight = new THREE.DirectionalLight(0x4488ff, 0.3);
+        fillLight.position.set(-3, 2, -3);
+        scene.add(fillLight);
+        
+        // State
+        let skinnedMesh = null;
+        let mixer = null;
+        let animations = [];
+        let currentAction = null;
+        let particles = null;
+        let showMesh = false;
+        let showParticles = true;
+        
+        // Particle arrays
+        let sampledIndices = [];
+        let targetPositions = null;
+        let currentPositions = null;
+        let velocities = null;
+        let scatterDirections = null;
+        let particleSeeds = null;
+        
+        // Settings
+        const S = {
+            count: 15000,
+            size: 0.012,
+            color: '#00ffff',
+            glow: 1.5,
+            speed: 1.0,
+            duration: 2.0,
+            bounce: 0.3,
+            turbulence: 0.2,
+            float: 0.1,
+            breathe: 0.05
+        };
+        
+        // Assembly state
+        let assemblyProgress = 1.0;  // 1 = on mesh, 0 = scattered
+        let targetAssembly = 1.0;
+        let assemblyStartTime = 0;
+        let isAnimating = false;
+        
+        // Load model
+        const loader = new GLTFLoader();
+        loader.load('models/meshy_merged_animations.glb', (gltf) => {
+            scene.add(gltf.scene);
+            
+            gltf.scene.traverse((child) => {
+                if (child.isSkinnedMesh) {
+                    skinnedMesh = child;
+                    skinnedMesh.visible = showMesh;
+                    skinnedMesh.material = new THREE.MeshBasicMaterial({
+                        color: 0x223344,
+                        wireframe: true,
+                        transparent: true,
+                        opacity: 0.2
+                    });
+                }
+            });
+            
+            // Animations
+            mixer = new THREE.AnimationMixer(gltf.scene);
+            animations = gltf.animations.sort((a, b) => a.name.localeCompare(b.name));
+            
+            const select = document.getElementById('animation');
+            animations.forEach((clip, i) => {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = clip.name;
+                if (clip.name.includes('Idle')) opt.selected = true;
+                select.appendChild(opt);
+            });
+            
+            const initial = animations.find(a => a.name.includes('Idle')) || animations[0];
+            playAnimation(initial);
+            
+            createParticles();
+            updateStatus();
+            
+        }, (p) => {
+            if (p.total) document.getElementById('status').textContent = `Loading ${(p.loaded/p.total*100).toFixed(0)}%`;
+        });
+        
+        function playAnimation(clip) {
+            if (currentAction) currentAction.fadeOut(0.3);
+            currentAction = mixer.clipAction(clip);
+            currentAction.reset().fadeIn(0.3).play();
+            currentAction.timeScale = S.speed;
+        }
+        
+        function createParticles() {
+            if (!skinnedMesh) return;
+            
+            if (particles) {
+                scene.remove(particles);
+                particles.geometry.dispose();
+                particles.material.dispose();
+            }
+            
+            const geo = skinnedMesh.geometry;
+            const vCount = geo.attributes.position.count;
+            
+            sampledIndices = Array.from({length: S.count}, () => Math.floor(Math.random() * vCount));
+            
+            targetPositions = new Float32Array(S.count * 3);
+            currentPositions = new Float32Array(S.count * 3);
+            velocities = new Float32Array(S.count * 3);
+            scatterDirections = new Float32Array(S.count * 3);
+            particleSeeds = new Float32Array(S.count * 4);
+            
+            for (let i = 0; i < S.count; i++) {
+                // Random scatter direction (spherical)
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const r = 1.5 + Math.random() * 2;
+                scatterDirections[i * 3] = Math.sin(phi) * Math.cos(theta) * r;
+                scatterDirections[i * 3 + 1] = Math.sin(phi) * Math.sin(theta) * r;
+                scatterDirections[i * 3 + 2] = Math.cos(phi) * r;
+                
+                // Random seeds for variation
+                particleSeeds[i * 4] = Math.random();
+                particleSeeds[i * 4 + 1] = Math.random();
+                particleSeeds[i * 4 + 2] = Math.random();
+                particleSeeds[i * 4 + 3] = Math.random();
+            }
+            
+            const pGeo = new THREE.BufferGeometry();
+            pGeo.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
+            
+            const pMat = new THREE.PointsMaterial({
+                color: new THREE.Color(S.color),
+                size: S.size,
+                transparent: true,
+                opacity: 0.9,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true
+            });
+            
+            particles = new THREE.Points(pGeo, pMat);
+            particles.visible = showParticles;
+            scene.add(particles);
+        }
+        
+        function updateSkinnedPositions() {
+            if (!skinnedMesh) return;
+            
+            skinnedMesh.skeleton.update();
+            
+            const geo = skinnedMesh.geometry;
+            const pos = geo.attributes.position;
+            const skinIdx = geo.attributes.skinIndex;
+            const skinWgt = geo.attributes.skinWeight;
+            const skeleton = skinnedMesh.skeleton;
+            const bones = skeleton.boneMatrices;
+            const bind = skinnedMesh.bindMatrix;
+            
+            const v = new THREE.Vector3();
+            const s = new THREE.Vector3();
+            const t = new THREE.Vector3();
+            const bm = new THREE.Matrix4();
+            
+            for (let i = 0; i < sampledIndices.length; i++) {
+                const idx = sampledIndices[i];
+                v.fromBufferAttribute(pos, idx).applyMatrix4(bind);
+                
+                const si = new THREE.Vector4().fromBufferAttribute(skinIdx, idx);
+                const sw = new THREE.Vector4().fromBufferAttribute(skinWgt, idx);
+                
+                s.set(0, 0, 0);
+                for (let j = 0; j < 4; j++) {
+                    const w = sw.getComponent(j);
+                    if (w === 0) continue;
+                    bm.fromArray(bones, si.getComponent(j) * 16);
+                    t.copy(v).applyMatrix4(bm).multiplyScalar(w);
+                    s.add(t);
+                }
+                
+                s.applyMatrix4(skinnedMesh.matrixWorld);
+                
+                targetPositions[i * 3] = s.x;
+                targetPositions[i * 3 + 1] = s.y;
+                targetPositions[i * 3 + 2] = s.z;
+            }
+        }
+        
+        function elasticOut(t, bounce) {
+            if (t === 0 || t === 1) return t;
+            const p = 0.3 + (1 - bounce) * 0.4;
+            return Math.pow(2, -10 * t) * Math.sin((t - p / 4) * (2 * Math.PI) / p) + 1;
+        }
+        
+        function updateParticles(time, delta) {
+            if (!particles || !targetPositions) return;
+            
+            updateSkinnedPositions();
+            
+            // Assembly animation
+            if (isAnimating) {
+                const elapsed = time - assemblyStartTime;
+                const rawProgress = Math.min(elapsed / S.duration, 1);
+                
+                if (targetAssembly > 0.5) {
+                    // Assembling - use elastic ease
+                    assemblyProgress = elasticOut(rawProgress, S.bounce);
+                } else {
+                    // Disassembling - use ease out
+                    assemblyProgress = 1 - Math.pow(rawProgress, 0.5);
+                }
+                
+                if (rawProgress >= 1) {
+                    isAnimating = false;
+                    assemblyProgress = targetAssembly;
+                }
+            }
+            
+            for (let i = 0; i < S.count; i++) {
+                const seed = particleSeeds[i * 4];
+                const seed2 = particleSeeds[i * 4 + 1];
+                const seed3 = particleSeeds[i * 4 + 2];
+                
+                // Target position (on mesh)
+                const tx = targetPositions[i * 3];
+                const ty = targetPositions[i * 3 + 1];
+                const tz = targetPositions[i * 3 + 2];
+                
+                // Scattered position
+                const sx = tx + scatterDirections[i * 3];
+                const sy = ty + scatterDirections[i * 3 + 1];
+                const sz = tz + scatterDirections[i * 3 + 2];
+                
+                // Interpolate based on assembly
+                let x = sx + (tx - sx) * assemblyProgress;
+                let y = sy + (ty - sy) * assemblyProgress;
+                let z = sz + (tz - sz) * assemblyProgress;
+                
+                // Add turbulence during transition
+                if (assemblyProgress > 0.05 && assemblyProgress < 0.95) {
+                    const turb = S.turbulence * (1 - Math.abs(assemblyProgress - 0.5) * 2);
+                    x += Math.sin(time * 3 + seed * 10) * turb * 0.3;
+                    y += Math.cos(time * 2.7 + seed2 * 10) * turb * 0.3;
+                    z += Math.sin(time * 3.3 + seed3 * 10) * turb * 0.3;
+                }
+                
+                // Ambient float
+                const floatAmt = S.float * assemblyProgress;
+                x += Math.sin(time * 0.5 + seed * 6.28) * floatAmt * 0.05;
+                y += Math.cos(time * 0.3 + seed2 * 6.28) * floatAmt * 0.05;
+                z += Math.sin(time * 0.4 + seed3 * 6.28) * floatAmt * 0.05;
+                
+                // Breathing
+                const breathe = Math.sin(time * 0.8) * S.breathe * assemblyProgress;
+                const center = new THREE.Vector3(0, 1, 0);
+                const dir = new THREE.Vector3(x, y, z).sub(center).normalize();
+                x += dir.x * breathe * 0.1;
+                y += dir.y * breathe * 0.1;
+                z += dir.z * breathe * 0.1;
+                
+                currentPositions[i * 3] = x;
+                currentPositions[i * 3 + 1] = y;
+                currentPositions[i * 3 + 2] = z;
+            }
+            
+            particles.geometry.attributes.position.needsUpdate = true;
+        }
+        
+        function updateStatus() {
+            document.getElementById('status').textContent = 
+                `${S.count.toLocaleString()} particles | ${animations.length} animations`;
+        }
+        
+        // Animation loop
+        const clock = new THREE.Clock();
+        let time = 0;
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            time += delta;
+            
+            if (mixer) mixer.update(delta);
+            updateParticles(time, delta);
+            
+            controls.update();
+            composer.render();
+        }
+        animate();
+        
+        // UI
+        const $ = id => document.getElementById(id);
+        
+        $('animation').onchange = e => playAnimation(animations[e.target.value]);
+        
+        $('speed').oninput = e => {
+            S.speed = e.target.value / 100;
+            $('speedV').textContent = S.speed.toFixed(1) + '×';
+            if (currentAction) currentAction.timeScale = S.speed;
+        };
+        
+        $('duration').oninput = e => {
+            S.duration = e.target.value / 100;
+            $('durationV').textContent = S.duration.toFixed(1) + 's';
+        };
+        
+        $('bounce').oninput = e => {
+            S.bounce = e.target.value / 100;
+            $('bounceV').textContent = Math.round(S.bounce * 100) + '%';
+        };
+        
+        $('turbulence').oninput = e => {
+            S.turbulence = e.target.value / 100;
+            $('turbV').textContent = Math.round(S.turbulence * 100) + '%';
+        };
+        
+        $('count').oninput = e => {
+            S.count = parseInt(e.target.value);
+            $('countV').textContent = S.count.toLocaleString();
+            createParticles();
+            updateStatus();
+        };
+        
+        $('size').oninput = e => {
+            S.size = e.target.value / 1000;
+            $('sizeV').textContent = S.size.toFixed(3);
+            if (particles) particles.material.size = S.size;
+        };
+        
+        $('color').oninput = e => {
+            S.color = e.target.value;
+            if (particles) particles.material.color.set(S.color);
+        };
+        
+        $('glow').oninput = e => {
+            S.glow = e.target.value / 10;
+            $('glowV').textContent = S.glow.toFixed(1);
+            bloomPass.strength = S.glow;
+        };
+        
+        $('float').oninput = e => {
+            S.float = e.target.value / 100;
+            $('floatV').textContent = Math.round(S.float * 100) + '%';
+        };
+        
+        $('breathe').oninput = e => {
+            S.breathe = e.target.value / 100;
+            $('breatheV').textContent = Math.round(S.breathe * 100) + '%';
+        };
+        
+        $('assembleBtn').onclick = () => {
+            targetAssembly = 1.0;
+            assemblyStartTime = time;
+            isAnimating = true;
+        };
+        
+        $('disassembleBtn').onclick = () => {
+            targetAssembly = 0.0;
+            assemblyStartTime = time;
+            isAnimating = true;
+        };
+        
+        $('meshBtn').onclick = e => {
+            showMesh = !showMesh;
+            if (skinnedMesh) skinnedMesh.visible = showMesh;
+            e.target.classList.toggle('active', showMesh);
+        };
+        
+        $('particlesBtn').onclick = e => {
+            showParticles = !showParticles;
+            if (particles) particles.visible = showParticles;
+            e.target.classList.toggle('active', showParticles);
+        };
+        
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            composer.setSize(container.clientWidth, container.clientHeight);
+        });
+    </script>
+</body>
+</html>

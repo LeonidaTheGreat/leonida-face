@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Skinned Mesh Particles - Leonida Face</title>
+    <style>
+        body { margin: 0; background: #1a1a2e; overflow: hidden; }
+        #info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: system-ui, sans-serif;
+            font-size: 14px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 300px;
+        }
+        #info h3 { margin: 0 0 10px 0; color: #00ffff; }
+        #info select, #info button {
+            margin: 5px 0;
+            padding: 8px;
+            width: 100%;
+            border-radius: 4px;
+            border: none;
+        }
+        #info button {
+            background: #00ffff;
+            color: #1a1a2e;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #info button:hover { background: #00cccc; }
+        .slider-row { margin: 8px 0; }
+        .slider-row label { display: block; font-size: 12px; color: #888; }
+        .slider-row input { width: 100%; }
+        #status { color: #00ffff; margin-top: 10px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>🦁 Skinned Particles</h3>
+        <div>
+            <label>Animation:</label>
+            <select id="animSelect"></select>
+        </div>
+        <div class="slider-row">
+            <label>Particle Count: <span id="countVal">5000</span></label>
+            <input type="range" id="particleCount" min="1000" max="50000" value="5000" step="1000">
+        </div>
+        <div class="slider-row">
+            <label>Particle Size: <span id="sizeVal">0.02</span></label>
+            <input type="range" id="particleSize" min="0.005" max="0.1" value="0.02" step="0.005">
+        </div>
+        <div class="slider-row">
+            <label>Glow: <span id="glowVal">1.0</span></label>
+            <input type="range" id="glow" min="0" max="3" value="1" step="0.1">
+        </div>
+        <button id="toggleMesh">Toggle Mesh Visibility</button>
+        <button id="toggleParticles">Toggle Particles</button>
+        <div id="status">Loading model...</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.5, 3);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+        
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.0, 0.4, 0.85
+        );
+        composer.addPass(bloomPass);
+        
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1, 0);
+        controls.enableDamping = true;
+        
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+        
+        // State
+        let skinnedMesh = null;
+        let mixer = null;
+        let animations = [];
+        let currentAction = null;
+        let particles = null;
+        let particlePositions = null;
+        let sampledIndices = [];
+        let showMesh = false;
+        let showParticles = true;
+        
+        // Settings
+        let particleCount = 5000;
+        let particleSize = 0.02;
+        
+        // Load model
+        const loader = new GLTFLoader();
+        loader.load('models/meshy_merged_animations.glb', (gltf) => {
+            const model = gltf.scene;
+            scene.add(model);
+            
+            // Find skinned mesh
+            model.traverse((child) => {
+                if (child.isSkinnedMesh) {
+                    skinnedMesh = child;
+                    skinnedMesh.visible = showMesh;
+                    console.log('Found skinned mesh:', child.name);
+                    console.log('Vertices:', child.geometry.attributes.position.count);
+                }
+            });
+            
+            // Setup animations
+            mixer = new THREE.AnimationMixer(model);
+            animations = gltf.animations;
+            
+            // Populate animation dropdown
+            const select = document.getElementById('animSelect');
+            animations.forEach((clip, i) => {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = clip.name;
+                if (clip.name.toLowerCase().includes('idle')) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+            
+            // Play initial animation
+            if (animations.length > 0) {
+                const idleAnim = animations.find(a => a.name.toLowerCase().includes('idle')) || animations[0];
+                playAnimation(idleAnim);
+            }
+            
+            // Create particles
+            createParticles();
+            
+            document.getElementById('status').textContent = `Loaded! ${animations.length} animations, ${skinnedMesh ? skinnedMesh.geometry.attributes.position.count.toLocaleString() : 0} vertices`;
+            
+        }, (progress) => {
+            const pct = (progress.loaded / progress.total * 100).toFixed(0);
+            document.getElementById('status').textContent = `Loading... ${pct}%`;
+        }, (error) => {
+            console.error('Error loading model:', error);
+            document.getElementById('status').textContent = 'Error loading model!';
+        });
+        
+        function playAnimation(clip) {
+            if (currentAction) {
+                currentAction.fadeOut(0.3);
+            }
+            currentAction = mixer.clipAction(clip);
+            currentAction.reset().fadeIn(0.3).play();
+        }
+        
+        function createParticles() {
+            if (!skinnedMesh) return;
+            
+            // Remove old particles
+            if (particles) {
+                scene.remove(particles);
+                particles.geometry.dispose();
+                particles.material.dispose();
+            }
+            
+            const geometry = skinnedMesh.geometry;
+            const posAttr = geometry.attributes.position;
+            const vertexCount = posAttr.count;
+            
+            // Sample vertices randomly
+            sampledIndices = [];
+            for (let i = 0; i < particleCount; i++) {
+                sampledIndices.push(Math.floor(Math.random() * vertexCount));
+            }
+            
+            // Create particle geometry
+            const particleGeometry = new THREE.BufferGeometry();
+            particlePositions = new Float32Array(particleCount * 3);
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+            
+            // Particle material with glow
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0x00ffff,
+                size: particleSize,
+                transparent: true,
+                opacity: 0.9,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true
+            });
+            
+            particles = new THREE.Points(particleGeometry, particleMaterial);
+            particles.visible = showParticles;
+            scene.add(particles);
+            
+            // Initial position update
+            updateParticlePositions();
+        }
+        
+        function updateParticlePositions() {
+            if (!skinnedMesh || !particles || !particlePositions) return;
+            
+            // Force skeleton update
+            skinnedMesh.skeleton.update();
+            
+            const geometry = skinnedMesh.geometry;
+            const posAttr = geometry.attributes.position;
+            const skinIndexAttr = geometry.attributes.skinIndex;
+            const skinWeightAttr = geometry.attributes.skinWeight;
+            
+            const skeleton = skinnedMesh.skeleton;
+            const boneMatrices = skeleton.boneMatrices;
+            const bindMatrix = skinnedMesh.bindMatrix;
+            const bindMatrixInverse = skinnedMesh.bindMatrixInverse;
+            
+            const vertex = new THREE.Vector3();
+            const skinned = new THREE.Vector3();
+            const temp = new THREE.Vector3();
+            const skinMatrix = new THREE.Matrix4();
+            const boneMatrix = new THREE.Matrix4();
+            
+            for (let i = 0; i < sampledIndices.length; i++) {
+                const idx = sampledIndices[i];
+                
+                // Get original vertex position
+                vertex.fromBufferAttribute(posAttr, idx);
+                
+                // Apply bind matrix
+                vertex.applyMatrix4(bindMatrix);
+                
+                // Get skin weights and indices
+                const skinIndex = new THREE.Vector4().fromBufferAttribute(skinIndexAttr, idx);
+                const skinWeight = new THREE.Vector4().fromBufferAttribute(skinWeightAttr, idx);
+                
+                // Compute skinned position
+                skinned.set(0, 0, 0);
+                
+                for (let j = 0; j < 4; j++) {
+                    const weight = skinWeight.getComponent(j);
+                    if (weight === 0) continue;
+                    
+                    const boneIndex = skinIndex.getComponent(j);
+                    boneMatrix.fromArray(boneMatrices, boneIndex * 16);
+                    
+                    temp.copy(vertex).applyMatrix4(boneMatrix).multiplyScalar(weight);
+                    skinned.add(temp);
+                }
+                
+                // Apply world matrix
+                skinned.applyMatrix4(skinnedMesh.matrixWorld);
+                
+                // Store in particle positions
+                particlePositions[i * 3] = skinned.x;
+                particlePositions[i * 3 + 1] = skinned.y;
+                particlePositions[i * 3 + 2] = skinned.z;
+            }
+            
+            particles.geometry.attributes.position.needsUpdate = true;
+        }
+        
+        // Animation loop
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            
+            if (mixer) {
+                mixer.update(delta);
+            }
+            
+            // Update particle positions to follow skinned mesh
+            updateParticlePositions();
+            
+            controls.update();
+            composer.render();
+        }
+        animate();
+        
+        // UI handlers
+        document.getElementById('animSelect').addEventListener('change', (e) => {
+            const clip = animations[e.target.value];
+            if (clip) playAnimation(clip);
+        });
+        
+        document.getElementById('particleCount').addEventListener('input', (e) => {
+            particleCount = parseInt(e.target.value);
+            document.getElementById('countVal').textContent = particleCount.toLocaleString();
+            createParticles();
+        });
+        
+        document.getElementById('particleSize').addEventListener('input', (e) => {
+            particleSize = parseFloat(e.target.value);
+            document.getElementById('sizeVal').textContent = particleSize.toFixed(3);
+            if (particles) {
+                particles.material.size = particleSize;
+            }
+        });
+        
+        document.getElementById('glow').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('glowVal').textContent = val.toFixed(1);
+            bloomPass.strength = val;
+        });
+        
+        document.getElementById('toggleMesh').addEventListener('click', () => {
+            showMesh = !showMesh;
+            if (skinnedMesh) skinnedMesh.visible = showMesh;
+        });
+        
+        document.getElementById('toggleParticles').addEventListener('click', () => {
+            showParticles = !showParticles;
+            if (particles) particles.visible = showParticles;
+        });
+        
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

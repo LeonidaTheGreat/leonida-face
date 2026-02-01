@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Skinned Particles v2 - Leonida Avatar</title>
+    <style>
+        body { margin: 0; background: #1a1a2e; overflow: hidden; }
+        #controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: system-ui, sans-serif;
+            font-size: 13px;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 8px;
+            width: 280px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        #controls h3 { margin: 0 0 10px 0; color: #00ffff; font-size: 16px; }
+        #controls h4 { margin: 15px 0 8px 0; color: #888; font-size: 12px; text-transform: uppercase; }
+        .row { margin: 6px 0; }
+        .row label { display: block; font-size: 11px; color: #aaa; margin-bottom: 2px; }
+        .row input[type="range"] { width: 100%; margin: 0; }
+        .row select { width: 100%; padding: 6px; border-radius: 4px; border: none; background: #333; color: white; }
+        .btn-row { display: flex; gap: 8px; margin: 10px 0; }
+        .btn { 
+            flex: 1; padding: 10px; border: none; border-radius: 6px; 
+            cursor: pointer; font-weight: bold; font-size: 12px;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #00ffff; color: #1a1a2e; }
+        .btn-primary:hover { background: #00cccc; }
+        .btn-secondary { background: #333; color: white; }
+        .btn-secondary:hover { background: #444; }
+        .btn-secondary.active { background: #00ffff; color: #1a1a2e; }
+        #status { color: #00ffff; margin-top: 10px; font-size: 11px; }
+        .value { float: right; color: #00ffff; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h3>🦁 Leonida Avatar</h3>
+        
+        <h4>Animation</h4>
+        <div class="row">
+            <select id="animSelect"></select>
+        </div>
+        <div class="row">
+            <label>Speed <span class="value" id="speedVal">1.0x</span></label>
+            <input type="range" id="animSpeed" min="0.1" max="2" value="1" step="0.1">
+        </div>
+        
+        <h4>Particles</h4>
+        <div class="row">
+            <label>Count <span class="value" id="countVal">10,000</span></label>
+            <input type="range" id="particleCount" min="1000" max="100000" value="10000" step="1000">
+        </div>
+        <div class="row">
+            <label>Size <span class="value" id="sizeVal">0.015</span></label>
+            <input type="range" id="particleSize" min="0.002" max="0.05" value="0.015" step="0.001">
+        </div>
+        <div class="row">
+            <label>Opacity <span class="value" id="opacityVal">0.9</span></label>
+            <input type="range" id="opacity" min="0.1" max="1" value="0.9" step="0.05">
+        </div>
+        
+        <h4>Appearance</h4>
+        <div class="row">
+            <label>Color</label>
+            <input type="color" id="color" value="#00ffff" style="width:100%;height:30px;border:none;border-radius:4px;">
+        </div>
+        <div class="row">
+            <label>Glow <span class="value" id="glowVal">1.5</span></label>
+            <input type="range" id="glow" min="0" max="4" value="1.5" step="0.1">
+        </div>
+        
+        <h4>Assembly Effect</h4>
+        <div class="btn-row">
+            <button class="btn btn-primary" id="assembleBtn">Assemble</button>
+            <button class="btn btn-primary" id="disassembleBtn">Disassemble</button>
+        </div>
+        <div class="row">
+            <label>Scatter Amount <span class="value" id="scatterVal">0%</span></label>
+            <input type="range" id="scatter" min="0" max="100" value="0" step="1">
+        </div>
+        <div class="row">
+            <label>Float Speed <span class="value" id="floatVal">0.5</span></label>
+            <input type="range" id="floatSpeed" min="0" max="2" value="0.5" step="0.1">
+        </div>
+        
+        <h4>View</h4>
+        <div class="btn-row">
+            <button class="btn btn-secondary" id="toggleMesh">Mesh</button>
+            <button class="btn btn-secondary active" id="toggleParticles">Particles</button>
+        </div>
+        
+        <div id="status">Loading model...</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.5, 3);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+        
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5, 0.4, 0.85
+        );
+        composer.addPass(bloomPass);
+        
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1, 0);
+        controls.enableDamping = true;
+        
+        // Lights
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 5, 5);
+        scene.add(dirLight);
+        
+        // State
+        let skinnedMesh = null;
+        let mixer = null;
+        let animations = [];
+        let currentAction = null;
+        let particles = null;
+        let showMesh = false;
+        let showParticles = true;
+        
+        // Particle data
+        let sampledIndices = [];
+        let basePositions = null;  // Original skinned positions
+        let scatterOffsets = null; // Random scatter directions
+        let currentPositions = null;
+        
+        // Settings
+        const settings = {
+            particleCount: 10000,
+            particleSize: 0.015,
+            opacity: 0.9,
+            color: '#00ffff',
+            scatter: 0,
+            floatSpeed: 0.5,
+            animSpeed: 1
+        };
+        
+        // Assembly animation
+        let assemblyProgress = 1.0; // 1 = assembled, 0 = disassembled
+        let targetAssembly = 1.0;
+        
+        // Load model
+        const loader = new GLTFLoader();
+        loader.load('models/meshy_merged_animations.glb', (gltf) => {
+            const model = gltf.scene;
+            scene.add(model);
+            
+            // Find skinned mesh
+            model.traverse((child) => {
+                if (child.isSkinnedMesh) {
+                    skinnedMesh = child;
+                    skinnedMesh.visible = showMesh;
+                    // Use basic material for the mesh
+                    skinnedMesh.material = new THREE.MeshBasicMaterial({ 
+                        color: 0x333344,
+                        wireframe: true,
+                        transparent: true,
+                        opacity: 0.3
+                    });
+                }
+            });
+            
+            // Setup animations
+            mixer = new THREE.AnimationMixer(model);
+            animations = gltf.animations;
+            
+            // Sort by name and populate dropdown
+            animations.sort((a, b) => a.name.localeCompare(b.name));
+            const select = document.getElementById('animSelect');
+            animations.forEach((clip, i) => {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = clip.name;
+                // Default to first idle
+                if (clip.name.toLowerCase().includes('idle') && !select.value) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+            
+            // Play initial animation
+            const initialAnim = animations.find(a => a.name.toLowerCase().includes('idle')) || animations[0];
+            if (initialAnim) playAnimation(initialAnim);
+            
+            // Create particles
+            createParticles();
+            
+            document.getElementById('status').textContent = 
+                `✓ ${animations.length} animations | ${skinnedMesh.geometry.attributes.position.count.toLocaleString()} vertices`;
+            
+        }, (progress) => {
+            if (progress.total) {
+                const pct = (progress.loaded / progress.total * 100).toFixed(0);
+                document.getElementById('status').textContent = `Loading... ${pct}%`;
+            }
+        }, (error) => {
+            console.error('Error:', error);
+            document.getElementById('status').textContent = 'Error loading model!';
+        });
+        
+        function playAnimation(clip) {
+            if (currentAction) currentAction.fadeOut(0.3);
+            currentAction = mixer.clipAction(clip);
+            currentAction.reset().fadeIn(0.3).play();
+            currentAction.timeScale = settings.animSpeed;
+        }
+        
+        function createParticles() {
+            if (!skinnedMesh) return;
+            
+            // Remove old particles
+            if (particles) {
+                scene.remove(particles);
+                particles.geometry.dispose();
+                particles.material.dispose();
+            }
+            
+            const geo = skinnedMesh.geometry;
+            const vertexCount = geo.attributes.position.count;
+            
+            // Sample vertices (uniform random)
+            sampledIndices = [];
+            for (let i = 0; i < settings.particleCount; i++) {
+                sampledIndices.push(Math.floor(Math.random() * vertexCount));
+            }
+            
+            // Initialize arrays
+            basePositions = new Float32Array(settings.particleCount * 3);
+            scatterOffsets = new Float32Array(settings.particleCount * 3);
+            currentPositions = new Float32Array(settings.particleCount * 3);
+            
+            // Generate random scatter directions
+            for (let i = 0; i < settings.particleCount; i++) {
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const r = 2 + Math.random() * 3; // Scatter distance
+                scatterOffsets[i * 3] = Math.sin(phi) * Math.cos(theta) * r;
+                scatterOffsets[i * 3 + 1] = Math.sin(phi) * Math.sin(theta) * r;
+                scatterOffsets[i * 3 + 2] = Math.cos(phi) * r;
+            }
+            
+            // Create geometry
+            const particleGeo = new THREE.BufferGeometry();
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
+            
+            // Create material
+            const particleMat = new THREE.PointsMaterial({
+                color: new THREE.Color(settings.color),
+                size: settings.particleSize,
+                transparent: true,
+                opacity: settings.opacity,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true
+            });
+            
+            particles = new THREE.Points(particleGeo, particleMat);
+            particles.visible = showParticles;
+            scene.add(particles);
+        }
+        
+        function updateParticles(time) {
+            if (!skinnedMesh || !particles) return;
+            
+            skinnedMesh.skeleton.update();
+            
+            const geo = skinnedMesh.geometry;
+            const posAttr = geo.attributes.position;
+            const skinIndexAttr = geo.attributes.skinIndex;
+            const skinWeightAttr = geo.attributes.skinWeight;
+            const skeleton = skinnedMesh.skeleton;
+            const boneMatrices = skeleton.boneMatrices;
+            const bindMatrix = skinnedMesh.bindMatrix;
+            
+            const vertex = new THREE.Vector3();
+            const skinned = new THREE.Vector3();
+            const temp = new THREE.Vector3();
+            const boneMatrix = new THREE.Matrix4();
+            
+            // Smooth assembly animation
+            const assemblySpeed = 0.03;
+            if (Math.abs(assemblyProgress - targetAssembly) > 0.001) {
+                assemblyProgress += (targetAssembly - assemblyProgress) * assemblySpeed;
+            }
+            
+            const scatter = settings.scatter / 100;
+            const effectiveScatter = scatter + (1 - assemblyProgress);
+            
+            for (let i = 0; i < sampledIndices.length; i++) {
+                const idx = sampledIndices[i];
+                
+                // Get original vertex
+                vertex.fromBufferAttribute(posAttr, idx);
+                vertex.applyMatrix4(bindMatrix);
+                
+                // Skinning
+                const skinIndex = new THREE.Vector4().fromBufferAttribute(skinIndexAttr, idx);
+                const skinWeight = new THREE.Vector4().fromBufferAttribute(skinWeightAttr, idx);
+                
+                skinned.set(0, 0, 0);
+                for (let j = 0; j < 4; j++) {
+                    const weight = skinWeight.getComponent(j);
+                    if (weight === 0) continue;
+                    boneMatrix.fromArray(boneMatrices, skinIndex.getComponent(j) * 16);
+                    temp.copy(vertex).applyMatrix4(boneMatrix).multiplyScalar(weight);
+                    skinned.add(temp);
+                }
+                
+                skinned.applyMatrix4(skinnedMesh.matrixWorld);
+                
+                // Store base position
+                basePositions[i * 3] = skinned.x;
+                basePositions[i * 3 + 1] = skinned.y;
+                basePositions[i * 3 + 2] = skinned.z;
+                
+                // Apply scatter/float effect
+                const floatOffset = Math.sin(time * settings.floatSpeed + i * 0.1) * 0.02;
+                
+                currentPositions[i * 3] = skinned.x + scatterOffsets[i * 3] * effectiveScatter;
+                currentPositions[i * 3 + 1] = skinned.y + scatterOffsets[i * 3 + 1] * effectiveScatter + floatOffset;
+                currentPositions[i * 3 + 2] = skinned.z + scatterOffsets[i * 3 + 2] * effectiveScatter;
+            }
+            
+            particles.geometry.attributes.position.needsUpdate = true;
+        }
+        
+        // Animation loop
+        const clock = new THREE.Clock();
+        let time = 0;
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            time += delta;
+            
+            if (mixer) mixer.update(delta);
+            updateParticles(time);
+            
+            controls.update();
+            composer.render();
+        }
+        animate();
+        
+        // UI handlers
+        document.getElementById('animSelect').onchange = (e) => {
+            const clip = animations[e.target.value];
+            if (clip) playAnimation(clip);
+        };
+        
+        document.getElementById('animSpeed').oninput = (e) => {
+            settings.animSpeed = parseFloat(e.target.value);
+            document.getElementById('speedVal').textContent = settings.animSpeed.toFixed(1) + 'x';
+            if (currentAction) currentAction.timeScale = settings.animSpeed;
+        };
+        
+        document.getElementById('particleCount').oninput = (e) => {
+            settings.particleCount = parseInt(e.target.value);
+            document.getElementById('countVal').textContent = settings.particleCount.toLocaleString();
+            createParticles();
+        };
+        
+        document.getElementById('particleSize').oninput = (e) => {
+            settings.particleSize = parseFloat(e.target.value);
+            document.getElementById('sizeVal').textContent = settings.particleSize.toFixed(3);
+            if (particles) particles.material.size = settings.particleSize;
+        };
+        
+        document.getElementById('opacity').oninput = (e) => {
+            settings.opacity = parseFloat(e.target.value);
+            document.getElementById('opacityVal').textContent = settings.opacity.toFixed(2);
+            if (particles) particles.material.opacity = settings.opacity;
+        };
+        
+        document.getElementById('color').oninput = (e) => {
+            settings.color = e.target.value;
+            if (particles) particles.material.color.set(settings.color);
+        };
+        
+        document.getElementById('glow').oninput = (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('glowVal').textContent = val.toFixed(1);
+            bloomPass.strength = val;
+        };
+        
+        document.getElementById('scatter').oninput = (e) => {
+            settings.scatter = parseInt(e.target.value);
+            document.getElementById('scatterVal').textContent = settings.scatter + '%';
+        };
+        
+        document.getElementById('floatSpeed').oninput = (e) => {
+            settings.floatSpeed = parseFloat(e.target.value);
+            document.getElementById('floatVal').textContent = settings.floatSpeed.toFixed(1);
+        };
+        
+        document.getElementById('assembleBtn').onclick = () => {
+            targetAssembly = 1.0;
+            settings.scatter = 0;
+            document.getElementById('scatter').value = 0;
+            document.getElementById('scatterVal').textContent = '0%';
+        };
+        
+        document.getElementById('disassembleBtn').onclick = () => {
+            targetAssembly = 0.0;
+        };
+        
+        document.getElementById('toggleMesh').onclick = (e) => {
+            showMesh = !showMesh;
+            if (skinnedMesh) skinnedMesh.visible = showMesh;
+            e.target.classList.toggle('active', showMesh);
+        };
+        
+        document.getElementById('toggleParticles').onclick = (e) => {
+            showParticles = !showParticles;
+            if (particles) particles.visible = showParticles;
+            e.target.classList.toggle('active', showParticles);
+        };
+        
+        // Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

@@ -1224,6 +1224,7 @@
                     headToBack: -normBounds.minZ
                 };
                 console.log('Walt reference stored:', waltReference);
+                console.log(`Walt position: center=(0,0,0), bounds X=[${normBounds.minX.toFixed(3)}, ${normBounds.maxX.toFixed(3)}], Y=[${normBounds.minY.toFixed(3)}, ${normBounds.maxY.toFixed(3)}], Z=[${normBounds.minZ.toFixed(3)}, ${normBounds.maxZ.toFixed(3)}]`);
             } else if (waltReference) {
                 // Non-Walt model: translate so head has same distance to front as Walt's head
                 // This ensures Effect Start plane cuts at same relative position to head
@@ -1234,6 +1235,7 @@
                 const zOffset = waltReference.headToFront - modelHeadToFront;
                 
                 console.log(`Adjusting ${modelName} Z: headToFront=${modelHeadToFront.toFixed(3)}, waltHeadToFront=${waltReference.headToFront.toFixed(3)}, zOffset=${zOffset.toFixed(3)}`);
+                console.log(`${modelName} BEFORE offset: bounds X=[${normBounds.minX.toFixed(3)}, ${normBounds.maxX.toFixed(3)}], Y=[${normBounds.minY.toFixed(3)}, ${normBounds.maxY.toFixed(3)}], Z=[${normBounds.minZ.toFixed(3)}, ${normBounds.maxZ.toFixed(3)}]`);
                 
                 // Apply Z translation to all vertices
                 allVertices = allVertices.map(v => ({

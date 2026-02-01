@@ -304,7 +304,55 @@
             <input type="range" id="floatDir" min="0" max="100" value="50">
         </div>
         
-        <h3>Surface Animation</h3>
+        <h3>Particle Emission</h3>
+        
+        <div class="slider-row">
+            <label>
+                <input type="checkbox" id="emissionEnabled" checked> Enable Emission
+            </label>
+        </div>
+        
+        <div class="slider-row">
+            <label>Emission Speed (lifecycle duration)</label>
+            <input type="range" id="emissionSpeed" min="1" max="200" value="30">
+            <div class="range-inputs">
+                <input type="number" id="emissionSpeedMin" value="1"> 
+                <span>-</span>
+                <input type="number" id="emissionSpeedMax" value="200">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Drift Distance (how far particles travel)</label>
+            <input type="range" id="emissionDrift" min="0" max="200" value="50">
+            <div class="range-inputs">
+                <input type="number" id="emissionDriftMin" value="0"> 
+                <span>-</span>
+                <input type="number" id="emissionDriftMax" value="200">
+            </div>
+        </div>
+        
+        <div class="slider-row">
+            <label>Drift Direction (0=radial, 100=upward bias)</label>
+            <input type="range" id="emissionDirection" min="0" max="100" value="30">
+        </div>
+        
+        <div class="slider-row">
+            <label>Turbulence (curl noise)</label>
+            <input type="range" id="emissionTurbulence" min="0" max="100" value="20">
+        </div>
+        
+        <div class="slider-row">
+            <label>Fade Start (% of lifecycle before fading)</label>
+            <input type="range" id="emissionFadeStart" min="0" max="100" value="40">
+        </div>
+        
+        <div class="slider-row">
+            <label>Size Decay (shrink as they travel)</label>
+            <input type="range" id="emissionSizeDecay" min="0" max="100" value="50">
+        </div>
+        
+        <h3>Legacy Surface Animation</h3>
         
         <div class="slider-row">
             <label>Surface Float Distance</label>
@@ -537,6 +585,19 @@
             floatAwayMin: 0,
             floatAwayMax: 2000,
             floatDir: 73,
+            // Emission settings (new)
+            emissionEnabled: true,
+            emissionSpeed: 30,
+            emissionSpeedMin: 1,
+            emissionSpeedMax: 200,
+            emissionDrift: 50,
+            emissionDriftMin: 0,
+            emissionDriftMax: 200,
+            emissionDirection: 30,
+            emissionTurbulence: 20,
+            emissionFadeStart: 40,
+            emissionSizeDecay: 50,
+            // Legacy surface animation
             surfaceFloat: 3,
             surfaceFloatMin: 0,
             surfaceFloatMax: 100,
@@ -624,6 +685,26 @@
             document.getElementById('floatAwayMax').value = settings.floatAwayMax;
             document.getElementById('floatDir').value = settings.floatDir;
             
+            // Emission settings
+            document.getElementById('emissionEnabled').checked = settings.emissionEnabled;
+            document.getElementById('emissionSpeed').min = settings.emissionSpeedMin;
+            document.getElementById('emissionSpeed').max = settings.emissionSpeedMax;
+            document.getElementById('emissionSpeed').value = settings.emissionSpeed;
+            document.getElementById('emissionSpeedMin').value = settings.emissionSpeedMin;
+            document.getElementById('emissionSpeedMax').value = settings.emissionSpeedMax;
+            
+            document.getElementById('emissionDrift').min = settings.emissionDriftMin;
+            document.getElementById('emissionDrift').max = settings.emissionDriftMax;
+            document.getElementById('emissionDrift').value = settings.emissionDrift;
+            document.getElementById('emissionDriftMin').value = settings.emissionDriftMin;
+            document.getElementById('emissionDriftMax').value = settings.emissionDriftMax;
+            
+            document.getElementById('emissionDirection').value = settings.emissionDirection;
+            document.getElementById('emissionTurbulence').value = settings.emissionTurbulence;
+            document.getElementById('emissionFadeStart').value = settings.emissionFadeStart;
+            document.getElementById('emissionSizeDecay').value = settings.emissionSizeDecay;
+            
+            // Legacy surface animation
             document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
             document.getElementById('surfaceFloat').max = settings.surfaceFloatMax;
             document.getElementById('surfaceFloat').value = settings.surfaceFloat;
@@ -1647,6 +1728,14 @@
                     modelBoundsZ: { value: new THREE.Vector2(particleBounds.minZ, particleBounds.maxZ) },
                     surfaceFloat: { value: settings.surfaceFloat / 100 },
                     surfaceSpeed: { value: settings.surfaceSpeed / 100 },
+                    // Emission uniforms
+                    emissionEnabled: { value: settings.emissionEnabled ? 1.0 : 0.0 },
+                    emissionSpeed: { value: settings.emissionSpeed / 100 },
+                    emissionDrift: { value: settings.emissionDrift / 100 },
+                    emissionDirection: { value: settings.emissionDirection / 100 },
+                    emissionTurbulence: { value: settings.emissionTurbulence / 100 },
+                    emissionFadeStart: { value: settings.emissionFadeStart / 100 },
+                    emissionSizeDecay: { value: settings.emissionSizeDecay / 100 },
                     assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
                     assemblyDirection: { value: settings.assemblyDirection === 'above' ? 1 : settings.assemblyDirection === 'below' ? 2 : 0 },
                     assemblySpread: { value: settings.assemblySpread / 100 },
@@ -1670,7 +1759,8 @@
                     bindMatrixInverse: { value: new THREE.Matrix4() },
                     normCenter: { value: new THREE.Vector3() },
                     normScale: { value: 1.0 },
-                    useGPUSkinning: { value: false }
+                    useGPUSkinning: { value: false },
+                    frozenModelMatrix: { value: new THREE.Matrix4() }
                 },
                 vertexShader: `
                     attribute float size;
@@ -1696,6 +1786,7 @@
                     uniform vec3 normCenter;
                     uniform float normScale;
                     uniform bool useGPUSkinning;
+                    uniform mat4 frozenModelMatrix;
                     
                     uniform float time;
                     uniform float scatter;
@@ -1710,6 +1801,14 @@
                     uniform vec2 modelBoundsZ;
                     uniform float surfaceFloat;
                     uniform float surfaceSpeed;
+                    // Emission uniforms
+                    uniform float emissionEnabled;
+                    uniform float emissionSpeed;
+                    uniform float emissionDrift;
+                    uniform float emissionDirection;
+                    uniform float emissionTurbulence;
+                    uniform float emissionFadeStart;
+                    uniform float emissionSizeDecay;
                     uniform float assemblyProgress;
                     uniform int assemblyDirection;
                     uniform float assemblySpread;
@@ -1728,6 +1827,7 @@
                     uniform float isDisassembling;
                     
                     varying float vAlpha;
+                    varying float vEmissionSizeMult;
                     
                     float applyFalloff(float t, int curve) {
                         if (curve == 0) return t; // linear
@@ -1790,24 +1890,85 @@
                         vec3 basePosition = mix(animatedConstellationPos, scatteredPosition, scatterAmount);
                         vec3 pos = basePosition;
                         
-                        // === Surface floating for ALL particles ===
+                        // Initialize emission size multiplier
+                        vEmissionSizeMult = 1.0;
+                        
+                        // === EMISSION SYSTEM ===
+                        // Particles spawn at surface, drift outward, fade, respawn
+                        if (emissionEnabled > 0.5) {
+                            // Per-particle lifecycle timing
+                            // Each particle has unique phase offset from seeds
+                            float cycleSpeed = emissionSpeed * 0.5; // Slower = longer lifetime
+                            float phaseOffset = seeds.x * 6.28318 + seeds.y * 3.14159; // Random start phase
+                            float speedVariation = 0.7 + seeds.z * 0.6; // 0.7-1.3x speed variation
+                            
+                            // Lifecycle phase: 0 = just spawned, 1 = about to respawn
+                            float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
+                            
+                            // Compute drift direction
+                            // Radial = away from model center
+                            vec3 radial = normalize(basePosition);
+                            // Add upward bias based on emissionDirection
+                            vec3 upBias = vec3(0.0, 1.0, 0.0);
+                            vec3 driftDir = normalize(mix(radial, upBias, emissionDirection));
+                            
+                            // Add per-particle direction variation using drift attribute
+                            vec3 particleVariation = normalize(drift);
+                            driftDir = normalize(driftDir + particleVariation * 0.3);
+                            
+                            // Add turbulence (curl noise approximation)
+                            if (emissionTurbulence > 0.0) {
+                                float turbPhase = lifecycle * 6.28318 + seeds.w * 3.14159;
+                                vec3 turbOffset = vec3(
+                                    sin(turbPhase + seeds.x * 10.0) * cos(turbPhase * 1.3),
+                                    sin(turbPhase * 0.7 + seeds.y * 10.0),
+                                    cos(turbPhase * 1.1 + seeds.z * 10.0)
+                                );
+                                driftDir = normalize(driftDir + turbOffset * emissionTurbulence * 0.5);
+                            }
+                            
+                            // Drift distance increases with lifecycle (ease-out curve)
+                            float driftProgress = 1.0 - pow(1.0 - lifecycle, 2.0); // Ease-out
+                            float driftDist = driftProgress * emissionDrift * 0.5; // Scale factor
+                            
+                            // Apply drift to position
+                            pos += driftDir * driftDist;
+                            
+                            // Alpha fade based on lifecycle
+                            // Starts fading at emissionFadeStart% of lifecycle
+                            float fadeProgress = max(0.0, (lifecycle - emissionFadeStart) / (1.0 - emissionFadeStart + 0.001));
+                            float emissionAlpha = 1.0 - fadeProgress;
+                            emissionAlpha = clamp(emissionAlpha, 0.0, 1.0);
+                            
+                            // Size decay (shrink as particles travel)
+                            vEmissionSizeMult = 1.0 - lifecycle * emissionSizeDecay;
+                            vEmissionSizeMult = max(vEmissionSizeMult, 0.1); // Don't shrink to zero
+                            
+                            // Store emission alpha (will be combined with dissipation alpha later)
+                            // We'll multiply it in after the other calculations
+                            vAlpha = emissionAlpha;
+                        }
+                        
+                        // === Legacy Surface floating (when emission disabled) ===
                         // Creates gentle movement while staying near the surface
-                        float t1 = time * surfaceSpeed + seeds.x;
-                        float t2 = time * surfaceSpeed * 0.7 + seeds.y;
-                        float t3 = time * surfaceSpeed * 0.5 + seeds.x * 2.0;
-                        
-                        // Tangent-ish movement (perpendicular to radial direction)
-                        vec3 radial = normalize(basePosition);
-                        vec3 tangent1 = normalize(cross(radial, vec3(0.0, 1.0, 0.0)));
-                        vec3 tangent2 = normalize(cross(radial, tangent1));
-                        
-                        // Gentle floating on surface
-                        float floatX = sin(t1) * surfaceFloat * 0.05;
-                        float floatY = sin(t2) * surfaceFloat * 0.03;
-                        float floatZ = sin(t3) * surfaceFloat * 0.02;
-                        
-                        pos += tangent1 * floatX + tangent2 * floatY;
-                        pos += radial * floatZ * 0.3; // Tiny bit of in/out breathing
+                        if (emissionEnabled < 0.5 && surfaceFloat > 0.0) {
+                            float t1 = time * surfaceSpeed + seeds.x;
+                            float t2 = time * surfaceSpeed * 0.7 + seeds.y;
+                            float t3 = time * surfaceSpeed * 0.5 + seeds.x * 2.0;
+                            
+                            // Tangent-ish movement (perpendicular to radial direction)
+                            vec3 radial = normalize(basePosition);
+                            vec3 tangent1 = normalize(cross(radial, vec3(0.0, 1.0, 0.0)));
+                            vec3 tangent2 = normalize(cross(radial, tangent1));
+                            
+                            // Gentle floating on surface
+                            float floatX = sin(t1) * surfaceFloat * 0.05;
+                            float floatY = sin(t2) * surfaceFloat * 0.03;
+                            float floatZ = sin(t3) * surfaceFloat * 0.02;
+                            
+                            pos += tangent1 * floatX + tangent2 * floatY;
+                            pos += radial * floatZ * 0.3; // Tiny bit of in/out breathing
+                        }
                         
                         // === Depth calculation for dissipation ===
                         // Transform basePosition to world space for camera-relative calculations
@@ -1840,27 +2001,34 @@
                         float floatAmount = falloff * floatAway;
                         float anim = sin(time * seeds.z + seeds.x) * 0.5 + 0.5;
                         
-                        // Away from camera = direction camera is looking (in world space)
-                        // Transform back to local space for position offset
+                        // === WORLD-SPACE DISSIPATION ===
+                        // Float offset is computed in WORLD space so particles "detach" from model
+                        // Use FIXED world direction (not camera-relative) so particles truly detach
+                        
                         mat3 normalMat = mat3(modelMatrix);
+                        
+                        // Fixed world direction: primarily backward (-Z) with some upward (+Y)
+                        // This creates a "falling back" effect regardless of camera angle
+                        vec3 fixedWorldDir = normalize(vec3(0.0, 0.3, -1.0));
+                        
+                        // Per-particle variation using drift (converted to world space)
+                        vec3 worldDrift = normalize(normalMat * drift);
+                        
+                        // Blend between fixed direction and per-particle drift
+                        // floatDir: 0 = more random/drift, 1 = more uniform/fixed direction
+                        vec3 worldFloatDirection = normalize(mix(worldDrift, fixedWorldDir, floatDir));
+                        
+                        // World-space offset for dissipated particles
+                        float driftMag = length(drift) * 2.0; // Scale up for visibility
+                        vec3 worldFloatOffset = worldFloatDirection * floatAmount * driftMag * (0.5 + anim * 0.5);
+                        worldFloatOffset.y += sin(time * 0.5 + seeds.y) * 0.03 * falloff;
+                        
+                        // Store world offset for later (applied after modelMatrix)
+                        vec3 dissipationWorldOffset = worldFloatOffset;
+                        
+                        // Alias for assembly animation (needs local-space direction)
                         mat3 invNormalMat = inverse(normalMat);
-                        vec3 localCameraDir = normalize(invNormalMat * cameraDir);
-                        vec3 awayDir = localCameraDir;
-                        
-                        // First: filter out toward-camera component from drift
-                        vec3 filteredDrift = drift;
-                        vec3 towardCamera = -localCameraDir;
-                        float towardComponent = dot(drift, towardCamera);
-                        if (towardComponent > 0.0) {
-                            filteredDrift -= towardCamera * towardComponent;
-                        }
-                        
-                        // floatDir: 0 = random (but never toward camera), 1 = directly away
-                        float driftMag = length(drift);
-                        vec3 floatDirection = mix(filteredDrift, awayDir * driftMag, floatDir);
-                        
-                        pos += floatDirection * floatAmount * (0.5 + anim * 0.5);
-                        pos.y += sin(time * 0.5 + seeds.y) * 0.03 * falloff;
+                        vec3 awayDir = normalize(invNormalMat * cameraDir);
                         
                         // === Assembly/Disassembly animation ===
                         // Logic:
@@ -2057,8 +2225,15 @@
                         }
                         
                         // Alpha based on dissipation
-                        vAlpha = 1.0 - falloff * dissipation;
-                        vAlpha = clamp(vAlpha, 0.02, 1.0);
+                        float dissipationAlpha = 1.0 - falloff * dissipation;
+                        dissipationAlpha = clamp(dissipationAlpha, 0.02, 1.0);
+                        
+                        // Combine emission alpha (if enabled) with dissipation alpha
+                        if (emissionEnabled > 0.5) {
+                            vAlpha = vAlpha * dissipationAlpha; // vAlpha was set by emission
+                        } else {
+                            vAlpha = dissipationAlpha;
+                        }
                         
                         // === Assembly Fade: particles disappear based on time progress ===
                         if (assemblyProgress < 0.999 && assemblyParticleProgress > 0.0) {
@@ -2091,10 +2266,27 @@
                             }
                         }
                         
-                        // Size reduction toward back
-                        float sizeScale = 1.0 - falloff * 0.5;
+                        // Size reduction toward back + emission decay
+                        float sizeScale = (1.0 - falloff * 0.5) * vEmissionSizeMult;
                         
-                        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                        // === World position with detachment ===
+                        // Use frozenModelMatrix for dissipated particles (captures rotation at reference time)
+                        // This makes dissipated particles world-fixed
+                        
+                        vec4 worldPos;
+                        if (falloff > 0.01) {
+                            // Blend between current model transform and frozen transform
+                            vec3 attachedWorld = (modelMatrix * vec4(pos, 1.0)).xyz;
+                            vec3 frozenWorld = (frozenModelMatrix * vec4(pos, 1.0)).xyz;
+                            
+                            // More dissipation = more frozen (world-fixed)
+                            vec3 blendedWorld = mix(attachedWorld, frozenWorld, falloff);
+                            worldPos = vec4(blendedWorld + dissipationWorldOffset, 1.0);
+                        } else {
+                            worldPos = modelMatrix * vec4(pos, 1.0);
+                        }
+                        
+                        vec4 mvPosition = viewMatrix * worldPos;
                         gl_PointSize = size * sizeScale * (80.0 / -mvPosition.z);
                         gl_Position = projectionMatrix * mvPosition;
                     }
@@ -2103,6 +2295,7 @@
                     uniform vec3 color;
                     uniform int shape;
                     varying float vAlpha;
+                    varying float vEmissionSizeMult;
                     
                     void main() {
                         vec2 center = gl_PointCoord - 0.5;
@@ -2140,6 +2333,10 @@
                     console.log('GPU Skinning DISABLED - using CPU fallback');
                 }
             }
+            
+            // Initialize frozen model matrix for world-space dissipation
+            modelGroup.updateMatrixWorld();
+            pointsMesh.material.uniforms.frozenModelMatrix.value.copy(modelGroup.matrixWorld);
             
             document.getElementById('status').textContent = `${count.toLocaleString()} particles`;
         }
@@ -2395,6 +2592,16 @@
                 uniforms.cameraDir.value.copy(dir);
                 uniforms.cameraPos.value.copy(camera.position);
                 
+                // Update frozen model matrix for world-space dissipation
+                // Freeze the matrix when dissipation is active (effectStart < 100)
+                // This makes dissipated particles stay world-fixed when model rotates
+                modelGroup.updateMatrixWorld();
+                if (settings.effectStart >= 100) {
+                    // No dissipation: keep updating frozen matrix to current
+                    uniforms.frozenModelMatrix.value.copy(modelGroup.matrixWorld);
+                }
+                // When effectStart < 100, frozen matrix stays as-is
+                
                 // Handle assembly/disassembly animation via shader uniform
                 const currentProgress = uniforms.assemblyProgress.value;
                 const diff = targetAssemblyProgress - currentProgress;
@@ -2493,6 +2700,19 @@
             settings.floatAwayMin = parseFloat(document.getElementById('floatAwayMin').value);
             settings.floatAwayMax = parseFloat(document.getElementById('floatAwayMax').value);
             settings.floatDir = parseFloat(document.getElementById('floatDir').value);
+            // Emission settings
+            settings.emissionEnabled = document.getElementById('emissionEnabled').checked;
+            settings.emissionSpeed = parseFloat(document.getElementById('emissionSpeed').value);
+            settings.emissionSpeedMin = parseFloat(document.getElementById('emissionSpeedMin').value);
+            settings.emissionSpeedMax = parseFloat(document.getElementById('emissionSpeedMax').value);
+            settings.emissionDrift = parseFloat(document.getElementById('emissionDrift').value);
+            settings.emissionDriftMin = parseFloat(document.getElementById('emissionDriftMin').value);
+            settings.emissionDriftMax = parseFloat(document.getElementById('emissionDriftMax').value);
+            settings.emissionDirection = parseFloat(document.getElementById('emissionDirection').value);
+            settings.emissionTurbulence = parseFloat(document.getElementById('emissionTurbulence').value);
+            settings.emissionFadeStart = parseFloat(document.getElementById('emissionFadeStart').value);
+            settings.emissionSizeDecay = parseFloat(document.getElementById('emissionSizeDecay').value);
+            // Legacy surface animation
             settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
             settings.surfaceFloatMin = parseFloat(document.getElementById('surfaceFloatMin').value);
             settings.surfaceFloatMax = parseFloat(document.getElementById('surfaceFloatMax').value);
@@ -2566,6 +2786,55 @@
         });
         setupSlider('surfaceFloat', 'surfaceFloat', false, true);
         setupSlider('surfaceSpeed', 'surfaceSpeed', false, true);
+        
+        // Emission controls
+        document.getElementById('emissionEnabled').addEventListener('change', (e) => {
+            settings.emissionEnabled = e.target.checked;
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.emissionEnabled.value = settings.emissionEnabled ? 1.0 : 0.0;
+            }
+        });
+        
+        // Emission sliders with min/max
+        function setupEmissionSlider(id, settingKey) {
+            const slider = document.getElementById(id);
+            const minInput = document.getElementById(id + 'Min');
+            const maxInput = document.getElementById(id + 'Max');
+            
+            slider.addEventListener('input', () => {
+                settings[settingKey] = parseFloat(slider.value);
+                if (pointsMesh) {
+                    pointsMesh.material.uniforms[settingKey].value = settings[settingKey] / 100;
+                }
+            });
+            
+            if (minInput) {
+                minInput.addEventListener('change', () => {
+                    slider.min = minInput.value;
+                    settings[settingKey + 'Min'] = parseFloat(minInput.value);
+                });
+            }
+            if (maxInput) {
+                maxInput.addEventListener('change', () => {
+                    slider.max = maxInput.value;
+                    settings[settingKey + 'Max'] = parseFloat(maxInput.value);
+                });
+            }
+        }
+        
+        setupEmissionSlider('emissionSpeed', 'emissionSpeed');
+        setupEmissionSlider('emissionDrift', 'emissionDrift');
+        
+        // Emission sliders without min/max
+        ['emissionDirection', 'emissionTurbulence', 'emissionFadeStart', 'emissionSizeDecay'].forEach(id => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                settings[id] = parseFloat(e.target.value);
+                if (pointsMesh) {
+                    pointsMesh.material.uniforms[id].value = settings[id] / 100;
+                }
+            });
+        });
+        
         setupSlider('glow', 'glow', false, false);
         
         document.getElementById('shape').addEventListener('change', (e) => {

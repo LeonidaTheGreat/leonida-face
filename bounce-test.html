@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bounce Presets - Magic Dust Test</title>
+    <style>
+        body {
+            background: #1a1a2e;
+            color: white;
+            font-family: system-ui, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { text-align: center; margin-bottom: 10px; }
+        .subtitle { text-align: center; color: #888; margin-bottom: 30px; }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .preset {
+            background: #252540;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .preset h3 {
+            margin: 0 0 5px 0;
+            color: #00ffff;
+        }
+        .preset .desc {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+        .demo-area {
+            height: 200px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        .particle {
+            width: 12px;
+            height: 12px;
+            background: #00ffff;
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+        }
+        .start-line, .end-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(255,255,255,0.2);
+        }
+        .start-line { bottom: 30px; }
+        .end-line { top: 30px; }
+        .label {
+            position: absolute;
+            font-size: 10px;
+            color: #666;
+            right: 10px;
+        }
+        .start-label { bottom: 32px; }
+        .end-label { top: 32px; }
+        .controls {
+            text-align: center;
+            margin: 30px 0;
+        }
+        button {
+            background: #00ffff;
+            color: #1a1a2e;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+        button:hover { background: #00cccc; }
+        .mode-toggle {
+            margin-bottom: 20px;
+        }
+        .mode-toggle button {
+            background: #333;
+            color: white;
+        }
+        .mode-toggle button.active {
+            background: #00ffff;
+            color: #1a1a2e;
+        }
+        .curve-preview {
+            height: 60px;
+            margin-top: 10px;
+            position: relative;
+            background: #1a1a2e;
+            border-radius: 4px;
+        }
+        .curve-canvas {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧞 Magic Dust Bounce Presets</h1>
+    <p class="subtitle">Compare different elastic bounce feels for the genie effect</p>
+    
+    <div class="controls">
+        <div class="mode-toggle">
+            <button id="disassembleBtn" class="active">Disassemble (fly out)</button>
+            <button id="assembleBtn">Assemble (fly in)</button>
+        </div>
+        <button onclick="playAll()">▶ Play All</button>
+        <button onclick="loopAll()">🔄 Loop</button>
+    </div>
+    
+    <div class="container" id="container"></div>
+
+    <script>
+        const presets = [
+            {
+                name: "1. Soft Elastic",
+                desc: "Gentle spring, slight overshoot",
+                fn: (t, dir) => {
+                    if (dir === 'in') {
+                        // Assemble: bounce at END (landing)
+                        return 1 - Math.pow(2, -10 * t) * Math.cos(t * Math.PI * 2);
+                    } else {
+                        // Disassemble: bounce at START (popping off)
+                        const rt = 1 - t; // reverse time for start-bounce
+                        const elastic = 1 - Math.pow(2, -10 * rt) * Math.cos(rt * Math.PI * 2);
+                        return 1 - elastic; // flip it
+                    }
+                }
+            },
+            {
+                name: "2. Medium Elastic", 
+                desc: "Classic spring bounce, 2 oscillations",
+                fn: (t, dir) => {
+                    if (dir === 'in') {
+                        return 1 - Math.pow(2, -8 * t) * Math.cos(t * Math.PI * 3);
+                    } else {
+                        const rt = 1 - t;
+                        const elastic = 1 - Math.pow(2, -8 * rt) * Math.cos(rt * Math.PI * 3);
+                        return 1 - elastic;
+                    }
+                }
+            },
+            {
+                name: "3. Snappy Elastic",
+                desc: "Quick snap with overshoot, fast settle",
+                fn: (t, dir) => {
+                    if (dir === 'in') {
+                        return 1 - Math.pow(2, -12 * t) * Math.cos(t * Math.PI * 2.5);
+                    } else {
+                        const rt = 1 - t;
+                        const elastic = 1 - Math.pow(2, -12 * rt) * Math.cos(rt * Math.PI * 2.5);
+                        return 1 - elastic;
+                    }
+                }
+            },
+            {
+                name: "4. Bouncy Spring",
+                desc: "More pronounced bounces, playful",
+                fn: (t, dir) => {
+                    if (dir === 'in') {
+                        return 1 - Math.pow(2, -6 * t) * Math.cos(t * Math.PI * 4);
+                    } else {
+                        const rt = 1 - t;
+                        const elastic = 1 - Math.pow(2, -6 * rt) * Math.cos(rt * Math.PI * 4);
+                        return 1 - elastic;
+                    }
+                }
+            },
+            {
+                name: "5. Magic Pop",
+                desc: "Pulls back then springs forward",
+                fn: (t, dir) => {
+                    if (dir === 'in') {
+                        // Assemble: overshoot then settle
+                        let ease;
+                        if (t < 0.7) {
+                            ease = 1.2 * Math.pow(t / 0.7, 2);
+                        } else {
+                            const t2 = (t - 0.7) / 0.3;
+                            ease = 1.2 - 0.2 * t2;
+                        }
+                        return ease;
+                    } else {
+                        // Disassemble: pull back first, then spring out
+                        let ease;
+                        if (t < 0.15) {
+                            ease = -0.2 * Math.sin(t / 0.15 * Math.PI / 2); // pull back
+                        } else {
+                            const t2 = (t - 0.15) / 0.85;
+                            ease = -0.2 * (1 - t2) + t2 * 1.1; // spring forward
+                        }
+                        return ease;
+                    }
+                }
+            },
+            {
+                name: "6. Genie Swirl",
+                desc: "Oscillating release, magical float",
+                fn: (t, dir) => {
+                    if (dir === 'in') {
+                        const base = 1 - Math.pow(2, -7 * t) * Math.cos(t * Math.PI * 3);
+                        const wave = Math.sin(t * Math.PI * 6) * 0.1 * (1 - t);
+                        return base + wave;
+                    } else {
+                        // Disassemble: wobbly start, smooth end
+                        const wave = Math.sin(t * Math.PI * 5) * 0.15 * Math.pow(1 - t, 2);
+                        const base = Math.pow(t, 0.6);
+                        return base + wave;
+                    }
+                }
+            },
+            {
+                name: "7. Dust Scatter",
+                desc: "Explosive pop, gentle drift",
+                fn: (t, dir) => {
+                    if (dir === 'in') {
+                        return 1 - Math.pow(1 - t, 4) + Math.sin(t * Math.PI * 2) * 0.15 * (1 - t);
+                    } else {
+                        // Fast initial burst with starting wobble
+                        const burst = 1 - Math.pow(1 - t, 0.4);
+                        const wobble = Math.sin(t * Math.PI * 4) * 0.2 * Math.pow(1 - t, 2);
+                        return burst + wobble;
+                    }
+                }
+            },
+            {
+                name: "8. Lamp Release",
+                desc: "Pressure burst with recoil",
+                fn: (t, dir) => {
+                    if (dir === 'in') {
+                        let ease;
+                        if (t < 0.8) {
+                            ease = 1.15 * Math.pow(t / 0.8, 2);
+                        } else {
+                            const t2 = (t - 0.8) / 0.2;
+                            ease = 1.15 - 0.15 * t2;
+                        }
+                        return ease;
+                    } else {
+                        // Disassemble: recoil back then burst forward
+                        let ease;
+                        if (t < 0.1) {
+                            ease = -0.25 * Math.sin(t / 0.1 * Math.PI / 2);
+                        } else if (t < 0.3) {
+                            const t2 = (t - 0.1) / 0.2;
+                            ease = -0.25 + 1.4 * Math.pow(t2, 0.5);
+                        } else {
+                            const t2 = (t - 0.3) / 0.7;
+                            const wobble = Math.sin(t2 * Math.PI * 3) * 0.08 * (1 - t2);
+                            ease = 1.15 - 0.15 * t2 + wobble;
+                        }
+                        return ease;
+                    }
+                }
+            }
+        ];
+
+        let mode = 'out'; // 'out' = disassemble, 'in' = assemble
+        let animations = [];
+        let looping = false;
+
+        function createPresetCard(preset, index) {
+            const div = document.createElement('div');
+            div.className = 'preset';
+            div.innerHTML = `
+                <h3>${preset.name}</h3>
+                <div class="desc">${preset.desc}</div>
+                <div class="demo-area" id="demo-${index}">
+                    <div class="start-line"></div>
+                    <div class="end-line"></div>
+                    <span class="label start-label">start</span>
+                    <span class="label end-label">end</span>
+                </div>
+                <div class="curve-preview">
+                    <canvas class="curve-canvas" id="curve-${index}"></canvas>
+                </div>
+            `;
+            return div;
+        }
+
+        function drawCurve(index, preset) {
+            const canvas = document.getElementById(`curve-${index}`);
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth * 2;
+            canvas.height = canvas.offsetHeight * 2;
+            ctx.scale(2, 2);
+            
+            const w = canvas.offsetWidth;
+            const h = canvas.offsetHeight;
+            
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            for (let i = 0; i <= 100; i++) {
+                const t = i / 100;
+                const val = preset.fn(t, mode);
+                const x = t * w;
+                const y = h - (val * h * 0.8 + h * 0.1);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            
+            // Draw 1.0 line
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, h * 0.1);
+            ctx.lineTo(w, h * 0.1);
+            ctx.stroke();
+        }
+
+        function createParticles(index) {
+            const demo = document.getElementById(`demo-${index}`);
+            // Clear existing particles
+            demo.querySelectorAll('.particle').forEach(p => p.remove());
+            
+            // Create 5 particles with staggered timing
+            for (let i = 0; i < 5; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = (30 + i * 55) + 'px';
+                particle.dataset.delay = i * 0.1;
+                particle.dataset.index = i;
+                demo.appendChild(particle);
+            }
+        }
+
+        function animatePreset(index, preset, duration = 2000) {
+            const demo = document.getElementById(`demo-${index}`);
+            const particles = demo.querySelectorAll('.particle');
+            const startY = mode === 'out' ? 170 : 30;
+            const endY = mode === 'out' ? 30 : 170;
+            
+            particles.forEach(particle => {
+                particle.style.bottom = 'auto';
+                particle.style.top = startY + 'px';
+            });
+            
+            const startTime = performance.now();
+            
+            function update() {
+                const elapsed = performance.now() - startTime;
+                
+                particles.forEach(particle => {
+                    const delay = parseFloat(particle.dataset.delay) * 1000;
+                    const particleElapsed = Math.max(0, elapsed - delay);
+                    const t = Math.min(1, particleElapsed / (duration - delay * 2));
+                    
+                    const easeVal = preset.fn(t, mode);
+                    const y = startY + (endY - startY) * (mode === 'out' ? easeVal : (1 - easeVal));
+                    particle.style.top = y + 'px';
+                });
+                
+                if (elapsed < duration + 500) {
+                    animations[index] = requestAnimationFrame(update);
+                } else if (looping) {
+                    setTimeout(() => animatePreset(index, preset, duration), 500);
+                }
+            }
+            
+            animations[index] = requestAnimationFrame(update);
+        }
+
+        function playAll() {
+            looping = false;
+            animations.forEach(a => cancelAnimationFrame(a));
+            presets.forEach((preset, index) => {
+                createParticles(index);
+                setTimeout(() => animatePreset(index, preset), 100);
+            });
+        }
+
+        function loopAll() {
+            looping = true;
+            playAll();
+        }
+
+        function init() {
+            const container = document.getElementById('container');
+            presets.forEach((preset, index) => {
+                container.appendChild(createPresetCard(preset, index));
+            });
+            
+            // Draw curves and create particles
+            setTimeout(() => {
+                presets.forEach((preset, index) => {
+                    drawCurve(index, preset);
+                    createParticles(index);
+                });
+            }, 100);
+        }
+
+        // Mode toggle
+        document.getElementById('disassembleBtn').onclick = () => {
+            mode = 'out';
+            document.getElementById('disassembleBtn').classList.add('active');
+            document.getElementById('assembleBtn').classList.remove('active');
+            presets.forEach((preset, index) => drawCurve(index, preset));
+        };
+        
+        document.getElementById('assembleBtn').onclick = () => {
+            mode = 'in';
+            document.getElementById('assembleBtn').classList.add('active');
+            document.getElementById('disassembleBtn').classList.remove('active');
+            presets.forEach((preset, index) => drawCurve(index, preset));
+        };
+
+        init();
+    </script>
+</body>
+</html>

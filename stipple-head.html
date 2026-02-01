@@ -295,6 +295,102 @@
             </div>
         </div>
         
+        <h3>Assembly Animation</h3>
+        
+        <div class="slider-row">
+            <label>Fly Direction</label>
+            <select id="assemblyDirection">
+                <option value="back">Back (away from camera)</option>
+                <option value="above">Above</option>
+                <option value="below">Below</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Direction Spread (perpendicular scatter)</label>
+            <input type="range" id="assemblySpread" min="0" max="100" value="20">
+        </div>
+        
+        <div class="slider-row">
+            <label>Direction Randomness (per-particle chaos)</label>
+            <input type="range" id="assemblyDirRandom" min="0" max="100" value="0">
+        </div>
+        
+        <div class="slider-row">
+            <label>Turbulence (swirl during motion)</label>
+            <input type="range" id="assemblyTurbulence" min="0" max="100" value="0">
+        </div>
+        
+        <div class="slider-row">
+            <label>Closer Particles Delay</label>
+            <input type="range" id="assemblyBackDelay" min="0" max="100" value="0">
+        </div>
+        
+        <div class="slider-row">
+            <label>Further Particles Delay</label>
+            <input type="range" id="assemblyFrontDelay" min="0" max="100" value="60">
+        </div>
+        
+        <div class="slider-row">
+            <label>Random Timing Spread</label>
+            <input type="range" id="assemblyRandomTime" min="0" max="100" value="30">
+        </div>
+        
+        <div class="slider-row">
+            <label>Fade Out (% of particle duration)</label>
+            <input type="range" id="assemblyFalloff" min="0" max="100" value="80">
+        </div>
+        
+        <div class="slider-row">
+            <label>Fade Easing</label>
+            <select id="assemblyFadeEasing">
+                <option value="linear">Linear</option>
+                <option value="ease-in">Ease In (slow start)</option>
+                <option value="ease-out" selected>Ease Out (slow end)</option>
+                <option value="ease-in-out">Ease In-Out</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Particle Duration (seconds)</label>
+            <input type="range" id="assemblyDuration" min="0.5" max="10" value="3" step="0.5">
+        </div>
+        
+        <div class="slider-row">
+            <label>Duration Spread (%)</label>
+            <input type="range" id="assemblyDurationSpread" min="0" max="100" value="50">
+        </div>
+        
+        <div class="slider-row">
+            <label>Easing Mode</label>
+            <select id="assemblyEasing">
+                <option value="uniform">Uniform (Smooth)</option>
+                <option value="random-type">Random Type (linear/ease-in/ease-out/bounce)</option>
+                <option value="random-intensity">Random Intensity</option>
+                <option value="random-overshoot">Random with Overshoot</option>
+            </select>
+        </div>
+        
+        <div class="slider-row">
+            <label>Bounce Particles (%)</label>
+            <input type="range" id="assemblyBouncePercent" min="0" max="100" value="20">
+        </div>
+        
+        <div class="slider-row">
+            <label>Bounce Strength</label>
+            <input type="range" id="assemblyBounceStrength" min="0" max="100" value="30">
+        </div>
+        
+        <div class="slider-row">
+            <label>Fly Distance</label>
+            <input type="range" id="assemblyDistance" min="1" max="100" value="30">
+            <div class="range-inputs">
+                <input type="number" id="assemblyDistanceMin" value="1"> 
+                <span>-</span>
+                <input type="number" id="assemblyDistanceMax" value="100">
+            </div>
+        </div>
+        
         <h3>Appearance</h3>
         
         <div class="slider-row">
@@ -340,6 +436,8 @@
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         
+        console.log('Script loaded!');
+        
         // Scene
         const container = document.getElementById('container');
         const scene = new THREE.Scene();
@@ -375,8 +473,7 @@
         let allVertices = [];
         let particleBaseData = [];
         let isAssembled = true;
-        let assemblyProgress = 1.0; // 0 = scattered, 1 = assembled
-        let targetPositions = null; // For disassembly animation
+        // Assembly state managed by shader uniform now
         let headAnimationEnabled = false;
         let modelGroup = null; // Container for model rotation
         
@@ -415,7 +512,24 @@
             glow: 65,
             glowMin: 0,
             glowMax: 1000,
-            background: 'dark'
+            background: 'dark',
+            assemblyDirection: 'back',
+            assemblySpread: 0,
+            assemblyDirRandom: 19,
+            assemblyTurbulence: 40,
+            assemblyBackDelay: 20,
+            assemblyFrontDelay: 0,
+            assemblyRandomTime: 89,
+            assemblyFalloff: 80,
+            assemblyFadeEasing: 'ease-in',
+            assemblyDuration: 3,
+            assemblyDurationSpread: 94,
+            assemblyEasing: 'random-type',
+            assemblyBouncePercent: 89,
+            assemblyBounceStrength: 48,
+            assemblyDistance: 100,
+            assemblyDistanceMin: 1,
+            assemblyDistanceMax: 100
         };
         
         // Load saved settings or use defaults
@@ -431,72 +545,97 @@
         
         // Apply settings to UI
         function applySettingsToUI() {
-            document.getElementById('size').value = settings.size;
+            // Set min/max BEFORE value (otherwise value gets clamped)
             document.getElementById('size').min = settings.sizeMin;
             document.getElementById('size').max = settings.sizeMax;
+            document.getElementById('size').value = settings.size;
             document.getElementById('sizeMin').value = settings.sizeMin;
             document.getElementById('sizeMax').value = settings.sizeMax;
             
-            document.getElementById('density').value = settings.density;
             document.getElementById('density').min = settings.densityMin;
             document.getElementById('density').max = settings.densityMax;
+            document.getElementById('density').value = settings.density;
             document.getElementById('densityMin').value = settings.densityMin;
             document.getElementById('densityMax').value = settings.densityMax;
             
             document.getElementById('scatter').value = settings.scatter;
-            document.getElementById('volumeDensity').value = settings.volumeDensity;
             document.getElementById('volumeDensity').min = settings.volumeDensityMin;
             document.getElementById('volumeDensity').max = settings.volumeDensityMax;
+            document.getElementById('volumeDensity').value = settings.volumeDensity;
             document.getElementById('volumeDensityMin').value = settings.volumeDensityMin;
             document.getElementById('volumeDensityMax').value = settings.volumeDensityMax;
             
             document.getElementById('shape').value = settings.shape;
             document.getElementById('reference').value = settings.reference;
             
-            document.getElementById('effectStart').value = settings.effectStart;
             document.getElementById('effectStart').min = settings.effectStartMin;
             document.getElementById('effectStart').max = settings.effectStartMax;
+            document.getElementById('effectStart').value = settings.effectStart;
             document.getElementById('effectStartMin').value = settings.effectStartMin;
             document.getElementById('effectStartMax').value = settings.effectStartMax;
             
-            document.getElementById('dissipation').value = settings.dissipation;
             document.getElementById('dissipation').min = settings.dissipationMin;
             document.getElementById('dissipation').max = settings.dissipationMax;
+            document.getElementById('dissipation').value = settings.dissipation;
             document.getElementById('dissipationMin').value = settings.dissipationMin;
             document.getElementById('dissipationMax').value = settings.dissipationMax;
             
             document.getElementById('falloffCurve').value = settings.falloffCurve;
             
-            document.getElementById('floatAway').value = settings.floatAway;
             document.getElementById('floatAway').min = settings.floatAwayMin;
             document.getElementById('floatAway').max = settings.floatAwayMax;
+            document.getElementById('floatAway').value = settings.floatAway;
             document.getElementById('floatAwayMin').value = settings.floatAwayMin;
             document.getElementById('floatAwayMax').value = settings.floatAwayMax;
             document.getElementById('floatDir').value = settings.floatDir;
             
-            document.getElementById('surfaceFloat').value = settings.surfaceFloat;
             document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
             document.getElementById('surfaceFloat').max = settings.surfaceFloatMax;
+            document.getElementById('surfaceFloat').value = settings.surfaceFloat;
             document.getElementById('surfaceFloatMin').value = settings.surfaceFloatMin;
             document.getElementById('surfaceFloatMax').value = settings.surfaceFloatMax;
             
-            document.getElementById('surfaceSpeed').value = settings.surfaceSpeed;
             document.getElementById('surfaceSpeed').min = settings.surfaceSpeedMin;
             document.getElementById('surfaceSpeed').max = settings.surfaceSpeedMax;
+            document.getElementById('surfaceSpeed').value = settings.surfaceSpeed;
             document.getElementById('surfaceSpeedMin').value = settings.surfaceSpeedMin;
             document.getElementById('surfaceSpeedMax').value = settings.surfaceSpeedMax;
             
             document.getElementById('color').value = settings.color;
             
-            document.getElementById('glow').value = settings.glow;
             document.getElementById('glow').min = settings.glowMin;
             document.getElementById('glow').max = settings.glowMax;
+            document.getElementById('glow').value = settings.glow;
             document.getElementById('glowMin').value = settings.glowMin;
             document.getElementById('glowMax').value = settings.glowMax;
             
             document.getElementById('background').value = settings.background;
             scene.background = new THREE.Color(settings.background === 'dark' ? 0x1a1a2e : 0xf5f5f5);
+            
+            // Assembly settings
+            document.getElementById('assemblyDirection').value = settings.assemblyDirection;
+            document.getElementById('assemblySpread').value = settings.assemblySpread;
+            document.getElementById('assemblyDirRandom').value = settings.assemblyDirRandom;
+            document.getElementById('assemblyTurbulence').value = settings.assemblyTurbulence;
+            document.getElementById('assemblyBackDelay').value = settings.assemblyBackDelay;
+            document.getElementById('assemblyFrontDelay').value = settings.assemblyFrontDelay;
+            document.getElementById('assemblyRandomTime').value = settings.assemblyRandomTime;
+            document.getElementById('assemblyFalloff').value = settings.assemblyFalloff;
+            document.getElementById('assemblyFadeEasing').value = settings.assemblyFadeEasing;
+            document.getElementById('assemblyDuration').value = settings.assemblyDuration;
+            document.getElementById('assemblyDurationSpread').value = settings.assemblyDurationSpread;
+            document.getElementById('assemblyEasing').value = settings.assemblyEasing;
+            document.getElementById('assemblyBouncePercent').value = settings.assemblyBouncePercent;
+            document.getElementById('assemblyBounceStrength').value = settings.assemblyBounceStrength;
+            document.getElementById('assemblyDistance').min = settings.assemblyDistanceMin;
+            document.getElementById('assemblyDistance').max = settings.assemblyDistanceMax;
+            document.getElementById('assemblyDistance').value = settings.assemblyDistance;
+            document.getElementById('assemblyDistanceMin').value = settings.assemblyDistanceMin;
+            document.getElementById('assemblyDistanceMax').value = settings.assemblyDistanceMax;
         }
+        
+        // Apply settings to UI on page load
+        applySettingsToUI();
         
         // Model URLs
         const modelUrls = {
@@ -909,7 +1048,23 @@
                     cameraDir: { value: new THREE.Vector3(0, 0, -1) },
                     cameraPos: { value: new THREE.Vector3(0, 0, 3) },
                     surfaceFloat: { value: settings.surfaceFloat / 100 },
-                    surfaceSpeed: { value: settings.surfaceSpeed / 100 }
+                    surfaceSpeed: { value: settings.surfaceSpeed / 100 },
+                    assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
+                    assemblyDirection: { value: settings.assemblyDirection === 'above' ? 1 : settings.assemblyDirection === 'below' ? 2 : 0 },
+                    assemblySpread: { value: settings.assemblySpread / 100 },
+                    assemblyDirRandom: { value: settings.assemblyDirRandom / 100 },
+                    assemblyTurbulence: { value: settings.assemblyTurbulence / 100 },
+                    assemblyBackDelay: { value: settings.assemblyBackDelay / 100 },
+                    assemblyFrontDelay: { value: settings.assemblyFrontDelay / 100 },
+                    assemblyRandomTime: { value: settings.assemblyRandomTime / 100 },
+                    assemblyFalloff: { value: settings.assemblyFalloff / 100 },
+                    assemblyFadeEasing: { value: settings.assemblyFadeEasing === 'ease-in' ? 1 : settings.assemblyFadeEasing === 'ease-out' ? 2 : settings.assemblyFadeEasing === 'ease-in-out' ? 3 : 0 },
+                    assemblyDistance: { value: settings.assemblyDistance / 10 },
+                    assemblyDurationSpread: { value: settings.assemblyDurationSpread / 100 },
+                    assemblyEasing: { value: settings.assemblyEasing === 'random-type' ? 1 : settings.assemblyEasing === 'random-intensity' ? 2 : settings.assemblyEasing === 'random-overshoot' ? 3 : 0 },
+                    assemblyBouncePercent: { value: settings.assemblyBouncePercent / 100 },
+                    assemblyBounceStrength: { value: settings.assemblyBounceStrength / 100 },
+                    isDisassembling: { value: 0.0 }
                 },
                 vertexShader: `
                     attribute float size;
@@ -930,6 +1085,22 @@
                     uniform vec3 cameraPos;
                     uniform float surfaceFloat;
                     uniform float surfaceSpeed;
+                    uniform float assemblyProgress;
+                    uniform int assemblyDirection;
+                    uniform float assemblySpread;
+                    uniform float assemblyDirRandom;
+                    uniform float assemblyTurbulence;
+                    uniform float assemblyBackDelay;
+                    uniform float assemblyFrontDelay;
+                    uniform float assemblyRandomTime;
+                    uniform float assemblyFalloff;
+                    uniform int assemblyFadeEasing;
+                    uniform float assemblyDistance;
+                    uniform float assemblyDurationSpread;
+                    uniform int assemblyEasing;
+                    uniform float assemblyBouncePercent;
+                    uniform float assemblyBounceStrength;
+                    uniform float isDisassembling;
                     
                     varying float vAlpha;
                     
@@ -1021,9 +1192,234 @@
                         pos += floatDirection * floatAmount * (0.5 + anim * 0.5);
                         pos.y += sin(time * 0.5 + seeds.y) * 0.03 * falloff;
                         
+                        // === Assembly/Disassembly animation ===
+                        // Logic:
+                        // 1. Direction: based on assemblyDirection (0=back, 1=above, 2=below)
+                        // 2. Timing: Closer particles first, further particles last
+                        // 3. Randomization: Each particle has random start offset (randomTime)
+                        // 4. Falloff: Particles fade as they get further (assemblyFalloff)
+                        float assemblyDistanceTraveled = 0.0; // Track assembly movement for falloff
+                        float assemblyParticleProgress = 0.0; // Track time progress for fade
+                        if (assemblyProgress < 0.999) {
+                            // === Base direction based on mode ===
+                            vec3 baseDir;
+                            float closeness; // 0 = further from destination, 1 = closer to destination
+                            
+                            if (assemblyDirection == 0) {
+                                // Back: fly away from camera
+                                baseDir = awayDir;
+                                closeness = normalizedBack; // back particles are "closer" to destination
+                            } else if (assemblyDirection == 1) {
+                                // Above: fly upward
+                                baseDir = vec3(0.0, 1.0, 0.0);
+                                // normalizedTop: 1 = top, 0 = bottom (using original position)
+                                float normalizedTop = clamp((constellationPosition.y + 1.5) / 3.0, 0.0, 1.0);
+                                closeness = normalizedTop; // top particles are "closer" to destination
+                            } else {
+                                // Below: fly downward
+                                baseDir = vec3(0.0, -1.0, 0.0);
+                                float normalizedBottom = clamp(1.0 - (constellationPosition.y + 1.5) / 3.0, 0.0, 1.0);
+                                closeness = normalizedBottom; // bottom particles are "closer" to destination
+                            }
+                            
+                            // === Direction with spread ===
+                            // Add random spread perpendicular to base direction
+                            vec3 spreadDir = normalize(drift - baseDir * dot(drift, baseDir));
+                            if (length(spreadDir) < 0.01) spreadDir = vec3(1.0, 0.0, 0.0);
+                            vec3 spreadDirection = normalize(baseDir + spreadDir * assemblySpread);
+                            
+                            // === Per-particle direction randomness ===
+                            // Create a completely random direction per particle
+                            vec3 randomDir = normalize(vec3(
+                                fract(seeds.x * 23.7 + seeds.z * 11.3) * 2.0 - 1.0,
+                                fract(seeds.y * 17.1 + seeds.w * 7.9) * 2.0 - 1.0,
+                                fract(seeds.z * 13.3 + seeds.x * 19.7) * 2.0 - 1.0
+                            ));
+                            // Blend between spread direction and random direction
+                            vec3 flyAwayDir = normalize(mix(spreadDirection, randomDir, assemblyDirRandom));
+                            
+                            // furtherness: 0 = closer particles, 1 = further particles
+                            float furtherness = 1.0 - closeness;
+                            
+                            // === Particle start time ===
+                            // Closer particles start at assemblyBackDelay
+                            // Further particles start at assemblyFrontDelay
+                            // Random spread adds variation to start times
+                            float baseStartTime = mix(assemblyBackDelay, assemblyFrontDelay, furtherness);
+                            float randomOffset = fract(seeds.x * 7.31 + seeds.y * 3.17 + seeds.w * 5.13) * assemblyRandomTime * 0.5;
+                            float startTime = clamp(baseStartTime + randomOffset, 0.0, 0.9);
+                            
+                            // === Particle progress ===
+                            float globalProgress = 1.0 - assemblyProgress; // 0->1 during disassemble
+                            
+                            // Per-particle duration: randomize how long each particle takes
+                            // With spread, some particles finish early (fast), others use full time (slow)
+                            // Range: [1.0 - spread*0.8, 1.0] so all particles complete within animation
+                            float durationRandom = fract(seeds.z * 11.7 + seeds.w * 4.3);
+                            float durationMult = 1.0 - durationRandom * assemblyDurationSpread * 0.8;
+                            durationMult = clamp(durationMult, 0.2, 1.0); // 20% to 100% of base duration
+                            
+                            float baseDuration = max(0.01, 1.0 - startTime);
+                            float particleDuration = baseDuration * durationMult;
+                            float particleProgress = clamp((globalProgress - startTime) / particleDuration, 0.0, 1.0);
+                            assemblyParticleProgress = particleProgress; // Save for fade calculation
+                            
+                            // === Easing based on mode ===
+                            float ease;
+                            float easingSeed = fract(seeds.x * 13.7 + seeds.y * 17.3 + seeds.z * 7.9);
+                            
+                            if (assemblyEasing == 0) {
+                                // Uniform: smooth ease-in-out for all
+                                ease = particleProgress * particleProgress * (3.0 - 2.0 * particleProgress);
+                            } else if (assemblyEasing == 1) {
+                                // Random type with controllable bounce
+                                // First determine if this particle bounces (separate seed)
+                                float bounceSeed = fract(seeds.w * 19.3 + seeds.x * 11.7);
+                                bool shouldBounce = bounceSeed < assemblyBouncePercent;
+                                
+                                if (shouldBounce && assemblyBounceStrength > 0.0) {
+                                    float t = particleProgress;
+                                    // Scale strength to be more subtle (0-1 range, squared for gradual control)
+                                    float strength = assemblyBounceStrength * assemblyBounceStrength * 0.5;
+                                    float bounceEase;
+                                    
+                                    if (isDisassembling > 0.5) {
+                                        // DISASSEMBLE: Subtle pull-back then spring forward
+                                        float pullback = 0.08 * strength; // Gentle pull-back
+                                        
+                                        if (t < 0.1) {
+                                            // Gentle pull back
+                                            float t2 = t / 0.1;
+                                            bounceEase = -pullback * sin(t2 * 3.14159 * 0.5);
+                                        } else if (t < 0.4) {
+                                            // Spring forward
+                                            float t2 = (t - 0.1) / 0.3;
+                                            bounceEase = -pullback * (1.0 - t2) + (1.0 + strength * 0.05) * pow(t2, 0.7);
+                                        } else {
+                                            // Gentle settle with tiny wobble
+                                            float t2 = (t - 0.4) / 0.6;
+                                            float wobble = sin(t2 * 3.14159 * 2.5) * strength * 0.03 * pow(1.0 - t2, 2.0);
+                                            bounceEase = 1.0 + strength * 0.05 * (1.0 - t2) + wobble;
+                                        }
+                                    } else {
+                                        // ASSEMBLE: Smooth approach with gentle elastic settle at end
+                                        // Base smooth motion
+                                        float smoothT = t * t * (3.0 - 2.0 * t); // Smooth step
+                                        
+                                        // Add elastic wobble only near the end (last 40%)
+                                        float wobble = 0.0;
+                                        if (t > 0.6) {
+                                            float wobbleT = (t - 0.6) / 0.4; // 0-1 in final phase
+                                            float freq = 2.0 + strength;
+                                            float amp = strength * 0.15 * (1.0 - wobbleT); // Decaying amplitude
+                                            wobble = sin(wobbleT * 3.14159 * freq) * amp;
+                                        }
+                                        
+                                        bounceEase = smoothT + wobble;
+                                    }
+                                    ease = bounceEase;
+                                } else {
+                                    // Non-bounce: distribute among linear, ease-in, ease-out, ease-in-out
+                                    int easingType = int(easingSeed * 4.0);
+                                    if (easingType == 0) {
+                                        ease = particleProgress; // Linear
+                                    } else if (easingType == 1) {
+                                        ease = particleProgress * particleProgress * particleProgress; // Ease-in
+                                    } else if (easingType == 2) {
+                                        ease = 1.0 - pow(1.0 - particleProgress, 3.0); // Ease-out
+                                    } else {
+                                        ease = particleProgress * particleProgress * (3.0 - 2.0 * particleProgress); // Ease-in-out
+                                    }
+                                }
+                            } else if (assemblyEasing == 2) {
+                                // Random intensity: random exponent (1-4) per particle
+                                float exponent = 1.0 + easingSeed * 3.0;
+                                // Apply as ease-out with variable intensity
+                                ease = 1.0 - pow(1.0 - particleProgress, exponent);
+                            } else {
+                                // Random overshoot: some particles overshoot and bounce back
+                                float overshootAmount = easingSeed * 0.3; // 0-30% overshoot
+                                float t = particleProgress;
+                                if (t < 0.7) {
+                                    // Travel to destination + overshoot
+                                    ease = (1.0 + overshootAmount) * (t / 0.7);
+                                    ease = ease * ease * (3.0 - 2.0 * ease / (1.0 + overshootAmount)); // smooth
+                                } else {
+                                    // Settle back from overshoot
+                                    float settleT = (t - 0.7) / 0.3;
+                                    float overshootPos = 1.0 + overshootAmount;
+                                    ease = overshootPos - overshootAmount * settleT;
+                                }
+                                ease = clamp(ease, 0.0, 1.0 + overshootAmount);
+                            }
+                            
+                            // === Distance ===
+                            float maxDist = assemblyDistance;
+                            float particleDist = maxDist * (0.5 + seeds.w * 0.5);
+                            
+                            // Calculate and apply assembly offset
+                            vec3 assemblyOffset = flyAwayDir * particleDist * ease;
+                            pos += assemblyOffset;
+                            
+                            // Store assembly distance for falloff (only the assembly movement, not other effects)
+                            float assemblyDistanceTraveled = length(assemblyOffset);
+                            
+                            // === Turbulence (swirl during motion) ===
+                            if (assemblyTurbulence > 0.0) {
+                                // Create perpendicular axes for swirl
+                                vec3 perpX = normalize(cross(flyAwayDir, vec3(0.0, 1.0, 0.0)));
+                                if (length(perpX) < 0.1) perpX = normalize(cross(flyAwayDir, vec3(1.0, 0.0, 0.0)));
+                                vec3 perpY = normalize(cross(flyAwayDir, perpX));
+                                
+                                // Per-particle phase and frequency
+                                float phase = seeds.x * 6.28318 + seeds.y * 3.14159;
+                                float freq = 2.0 + seeds.z * 3.0; // 2-5 oscillations
+                                
+                                // Swirl increases with travel distance, fades at end
+                                float swirlStrength = ease * (1.0 - ease * 0.5) * assemblyTurbulence * particleDist * 0.3;
+                                
+                                // Oscillating offset perpendicular to travel direction
+                                float swirlX = sin(ease * freq * 6.28318 + phase) * swirlStrength;
+                                float swirlY = cos(ease * freq * 6.28318 + phase + seeds.w * 3.14) * swirlStrength;
+                                
+                                pos += perpX * swirlX + perpY * swirlY;
+                            }
+                        }
+                        
                         // Alpha based on dissipation
                         vAlpha = 1.0 - falloff * dissipation;
                         vAlpha = clamp(vAlpha, 0.02, 1.0);
+                        
+                        // === Assembly Fade: particles disappear based on time progress ===
+                        if (assemblyProgress < 0.999 && assemblyParticleProgress > 0.0) {
+                            // Fade out at X% of particle's animation duration
+                            float fadeAt = assemblyFalloff;
+                            if (assemblyParticleProgress > fadeAt) {
+                                vAlpha = 0.0;
+                            } else if (assemblyParticleProgress > fadeAt * 0.5) {
+                                // Fade starting at 50% of threshold
+                                float fadeStart = fadeAt * 0.5;
+                                float fadeProgress = (assemblyParticleProgress - fadeStart) / (fadeAt - fadeStart);
+                                
+                                // Apply easing to fade progress
+                                float easedFade;
+                                if (assemblyFadeEasing == 0) {
+                                    // Linear
+                                    easedFade = fadeProgress;
+                                } else if (assemblyFadeEasing == 1) {
+                                    // Ease-in (slow start, fast end)
+                                    easedFade = fadeProgress * fadeProgress * fadeProgress;
+                                } else if (assemblyFadeEasing == 2) {
+                                    // Ease-out (fast start, slow end)
+                                    easedFade = 1.0 - pow(1.0 - fadeProgress, 3.0);
+                                } else {
+                                    // Ease-in-out
+                                    easedFade = fadeProgress * fadeProgress * (3.0 - 2.0 * fadeProgress);
+                                }
+                                
+                                vAlpha *= 1.0 - easedFade;
+                            }
+                        }
                         
                         // Size reduction toward back
                         float sizeScale = 1.0 - falloff * 0.5;
@@ -1068,38 +1464,24 @@
         }
         
         // Assembly/Disassembly functions
+        // Assembly state
+        let targetAssemblyProgress = 1.0;
+        
         function disassemble() {
-            if (!pointsMesh) return;
+            console.log('Disassemble called');
+            if (!pointsMesh) { console.log('No pointsMesh!'); return; }
             isAssembled = false;
-            const positions = pointsMesh.geometry.attributes.position.array;
-            const basePos = pointsMesh.geometry.attributes.basePosition.array;
-            const count = positions.length / 3;
-            
-            // Create scattered target positions
-            targetPositions = new Float32Array(positions.length);
-            for (let i = 0; i < count; i++) {
-                const bx = basePos[i * 3];
-                const by = basePos[i * 3 + 1];
-                const bz = basePos[i * 3 + 2];
-                
-                // Scatter outward from center with randomness
-                const len = Math.sqrt(bx*bx + by*by + bz*bz) || 1;
-                const nx = bx / len, ny = by / len, nz = bz / len;
-                const scatter = 3 + Math.random() * 4;
-                
-                targetPositions[i * 3] = nx * scatter + (Math.random() - 0.5) * 2;
-                targetPositions[i * 3 + 1] = ny * scatter + (Math.random() - 0.5) * 2;
-                targetPositions[i * 3 + 2] = nz * scatter + (Math.random() - 0.5) * 2;
-            }
+            targetAssemblyProgress = 0.0;
+            pointsMesh.material.uniforms.isDisassembling.value = 1.0;
+            console.log('targetAssemblyProgress set to', targetAssemblyProgress);
             document.getElementById('status').textContent = 'Disassembling...';
         }
         
         function assemble() {
+            if (!pointsMesh) return;
             isAssembled = true;
-            // Target positions are the original base positions
-            if (pointsMesh) {
-                targetPositions = pointsMesh.geometry.attributes.basePosition.array.slice();
-            }
+            targetAssemblyProgress = 1.0;
+            pointsMesh.material.uniforms.isDisassembling.value = 0.0;
             document.getElementById('status').textContent = 'Assembling...';
         }
         
@@ -1117,31 +1499,21 @@
                 uniforms.cameraDir.value.copy(dir);
                 uniforms.cameraPos.value.copy(camera.position);
                 
-                // Handle assembly/disassembly animation
-                if (targetPositions) {
-                    const positions = pointsMesh.geometry.attributes.position.array;
-                    const speed = 0.05; // Interpolation speed
-                    let maxDist = 0;
+                // Handle assembly/disassembly animation via shader uniform
+                const currentProgress = uniforms.assemblyProgress.value;
+                const diff = targetAssemblyProgress - currentProgress;
+                if (Math.abs(diff) > 0.001) {
+                    // Duration in seconds: ~60fps, so speed = 1 / (seconds * 60)
+                    const framesNeeded = settings.assemblyDuration * 60;
+                    const speed = 1.0 / framesNeeded;
+                    uniforms.assemblyProgress.value += Math.sign(diff) * speed;
                     
-                    for (let i = 0; i < positions.length; i++) {
-                        const diff = targetPositions[i] - positions[i];
-                        positions[i] += diff * speed;
-                        maxDist = Math.max(maxDist, Math.abs(diff));
-                    }
-                    
-                    pointsMesh.geometry.attributes.position.needsUpdate = true;
-                    
-                    // Update assembly progress
-                    assemblyProgress = isAssembled ? 
-                        Math.min(1, assemblyProgress + 0.02) : 
-                        Math.max(0, assemblyProgress - 0.02);
-                    
-                    // Check if animation is complete
-                    if (maxDist < 0.01) {
+                    // Update status when animation completes
+                    if (Math.abs(diff) < 0.01) {
                         if (isAssembled) {
                             document.getElementById('status').textContent = `${particleBaseData.length.toLocaleString()} particles`;
                         } else {
-                            document.getElementById('status').textContent = 'Scattered';
+                            document.getElementById('status').textContent = 'Disassembled';
                         }
                     }
                 }
@@ -1327,6 +1699,66 @@
         document.getElementById('background').addEventListener('change', (e) => {
             settings.background = e.target.value;
             scene.background = new THREE.Color(settings.background === 'dark' ? 0x1a1a2e : 0xf5f5f5);
+        });
+        
+        // Assembly animation sliders
+        document.getElementById('assemblyDuration').addEventListener('input', (e) => {
+            settings.assemblyDuration = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('assemblyDirection').addEventListener('change', (e) => {
+            settings.assemblyDirection = e.target.value;
+            if (pointsMesh) {
+                // 0 = back, 1 = above, 2 = below
+                const dirMap = { back: 0, above: 1, below: 2 };
+                pointsMesh.material.uniforms.assemblyDirection.value = dirMap[settings.assemblyDirection];
+            }
+        });
+        
+        document.getElementById('assemblyEasing').addEventListener('change', (e) => {
+            settings.assemblyEasing = e.target.value;
+            if (pointsMesh) {
+                // 0 = uniform, 1 = random-type, 2 = random-intensity, 3 = random-overshoot
+                const easingMap = { 'uniform': 0, 'random-type': 1, 'random-intensity': 2, 'random-overshoot': 3 };
+                pointsMesh.material.uniforms.assemblyEasing.value = easingMap[settings.assemblyEasing];
+            }
+        });
+        
+        document.getElementById('assemblyFadeEasing').addEventListener('change', (e) => {
+            settings.assemblyFadeEasing = e.target.value;
+            if (pointsMesh) {
+                // 0 = linear, 1 = ease-in, 2 = ease-out, 3 = ease-in-out
+                const fadeEasingMap = { 'linear': 0, 'ease-in': 1, 'ease-out': 2, 'ease-in-out': 3 };
+                pointsMesh.material.uniforms.assemblyFadeEasing.value = fadeEasingMap[settings.assemblyFadeEasing];
+            }
+        });
+        
+        ['assemblySpread', 'assemblyDirRandom', 'assemblyTurbulence', 'assemblyBackDelay', 'assemblyFrontDelay', 'assemblyRandomTime', 'assemblyFalloff', 'assemblyDurationSpread', 'assemblyBouncePercent', 'assemblyBounceStrength'].forEach(id => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                settings[id] = parseFloat(e.target.value);
+                if (pointsMesh) {
+                    pointsMesh.material.uniforms[id].value = settings[id] / 100;
+                }
+            });
+        });
+        
+        document.getElementById('assemblyDistance').addEventListener('input', (e) => {
+            settings.assemblyDistance = parseFloat(e.target.value);
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.assemblyDistance.value = settings.assemblyDistance / 10;
+            }
+        });
+        
+        document.getElementById('assemblyDistanceMin').addEventListener('change', (e) => {
+            const slider = document.getElementById('assemblyDistance');
+            slider.min = e.target.value;
+            settings.assemblyDistanceMin = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('assemblyDistanceMax').addEventListener('change', (e) => {
+            const slider = document.getElementById('assemblyDistance');
+            slider.max = e.target.value;
+            settings.assemblyDistanceMax = parseFloat(e.target.value);
         });
     </script>
 </body>

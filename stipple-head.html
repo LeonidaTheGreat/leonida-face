@@ -1211,24 +1211,29 @@
             });
             
             if (modelName === 'walt') {
-                // Walt is the reference - store his bounds
+                // Walt is the reference - store his bounds relative to Effect Start
+                // Effect Start plane is at: maxZ - effectStart% * depth
+                // Head is at origin (0,0,0). Store head's distance from front (maxZ).
                 waltReference = {
                     scale: scale,
                     minZ: normBounds.minZ,
                     maxZ: normBounds.maxZ,
                     depth: normBounds.maxZ - normBounds.minZ,
-                    headCenterY: 0 // Walt's head is centered at origin
+                    // Head is at Z=0, so head-to-front distance is maxZ
+                    headToFront: normBounds.maxZ,
+                    headToBack: -normBounds.minZ
                 };
                 console.log('Walt reference stored:', waltReference);
             } else if (waltReference) {
-                // Non-Walt model: translate Z to match Walt's bounds
-                // Don't re-scale, just shift so front/back match Walt's
-                const modelDepth = normBounds.maxZ - normBounds.minZ;
-                const modelCenterZ = (normBounds.minZ + normBounds.maxZ) / 2;
-                const waltCenterZ = (waltReference.minZ + waltReference.maxZ) / 2;
-                const zOffset = waltCenterZ - modelCenterZ;
+                // Non-Walt model: translate so head has same distance to front as Walt's head
+                // This ensures Effect Start plane cuts at same relative position to head
+                const modelMaxZ = normBounds.maxZ;
+                const modelHeadToFront = modelMaxZ; // Head is at Z=0
                 
-                console.log(`Adjusting ${modelName} Z: modelDepth=${modelDepth.toFixed(3)}, waltDepth=${waltReference.depth.toFixed(3)}, zOffset=${zOffset.toFixed(3)}`);
+                // Offset so this model's headToFront matches Walt's headToFront
+                const zOffset = waltReference.headToFront - modelHeadToFront;
+                
+                console.log(`Adjusting ${modelName} Z: headToFront=${modelHeadToFront.toFixed(3)}, waltHeadToFront=${waltReference.headToFront.toFixed(3)}, zOffset=${zOffset.toFixed(3)}`);
                 
                 // Apply Z translation to all vertices
                 allVertices = allVertices.map(v => ({

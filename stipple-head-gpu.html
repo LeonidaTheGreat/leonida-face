@@ -644,6 +644,55 @@
         controls.target.set(0, 0, 0); // Center of model
         controls.update();
         
+        // Model rotation mode (instead of camera orbit)
+        let rotateModelMode = true; // Default: rotate model, not camera
+        let isDragging = false;
+        let previousMouseX = 0;
+        let previousMouseY = 0;
+        
+        if (rotateModelMode) {
+            controls.enabled = false; // Disable orbit controls
+        }
+        
+        renderer.domElement.addEventListener('mousedown', (e) => {
+            if (rotateModelMode) {
+                isDragging = true;
+                previousMouseX = e.clientX;
+                previousMouseY = e.clientY;
+            }
+        });
+        
+        renderer.domElement.addEventListener('mousemove', (e) => {
+            if (rotateModelMode && isDragging && modelGroup) {
+                const deltaX = e.clientX - previousMouseX;
+                const deltaY = e.clientY - previousMouseY;
+                
+                // Rotate model based on mouse movement
+                modelGroup.rotation.y += deltaX * 0.01;
+                modelGroup.rotation.x += deltaY * 0.01;
+                
+                previousMouseX = e.clientX;
+                previousMouseY = e.clientY;
+            }
+        });
+        
+        renderer.domElement.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        renderer.domElement.addEventListener('mouseleave', () => {
+            isDragging = false;
+        });
+        
+        // Zoom with mouse wheel (works in both modes)
+        renderer.domElement.addEventListener('wheel', (e) => {
+            if (rotateModelMode) {
+                e.preventDefault();
+                camera.position.z += e.deltaY * 0.005;
+                camera.position.z = Math.max(1, Math.min(10, camera.position.z));
+            }
+        }, { passive: false });
+        
         // State
         let time = 0;
         let pointsMesh = null;

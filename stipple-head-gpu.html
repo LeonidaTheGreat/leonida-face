@@ -408,9 +408,20 @@
         </div>
         
         <div class="slider-row">
-            <label>Falloff from Boundary (fade into distance)</label>
-            <input type="range" id="emissionBoundaryFalloff" min="0" max="100" value="50">
+            <label>Falloff from Boundary</label>
+            <input type="range" id="emissionBoundaryFalloff" min="0" max="200" value="50">
             <span id="emissionBoundaryFalloffValue">50</span>
+            <input type="number" id="emissionBoundaryFalloffMax" value="200" style="width:50px;margin-left:5px;">
+        </div>
+        
+        <div class="slider-row">
+            <label>Falloff Curve</label>
+            <select id="emissionFalloffCurve">
+                <option value="linear">Linear</option>
+                <option value="quadratic" selected>Quadratic</option>
+                <option value="cubic">Cubic</option>
+                <option value="exponential">Exponential</option>
+            </select>
         </div>
         
         <h3>Legacy Surface Animation</h3>
@@ -668,7 +679,9 @@
             // Heat-up and Pop phases
             emissionHeatDuration: 20, // % of lifecycle spent heating up (attached)
             emissionPopIntensity: 50, // Initial pop velocity when detaching
-            emissionBoundaryFalloff: 50, // How quickly effect fades away from boundary (0=no falloff, 100=sharp)
+            emissionBoundaryFalloff: 50, // How quickly effect fades away from boundary
+            emissionBoundaryFalloffMax: 200, // Max slider value
+            emissionFalloffCurve: 'quadratic', // linear, quadratic, cubic, exponential
             // Legacy surface animation
             surfaceFloat: 3,
             surfaceFloatMin: 0,
@@ -784,6 +797,9 @@
             document.getElementById('emissionHeatDuration').value = settings.emissionHeatDuration;
             document.getElementById('emissionPopIntensity').value = settings.emissionPopIntensity;
             document.getElementById('emissionBoundaryFalloff').value = settings.emissionBoundaryFalloff;
+            document.getElementById('emissionBoundaryFalloff').max = settings.emissionBoundaryFalloffMax || 200;
+            document.getElementById('emissionBoundaryFalloffMax').value = settings.emissionBoundaryFalloffMax || 200;
+            document.getElementById('emissionFalloffCurve').value = settings.emissionFalloffCurve || 'quadratic';
             
             // Legacy surface animation
             document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
@@ -1878,6 +1894,7 @@
                     emissionHeatDuration: { value: settings.emissionHeatDuration / 100 },
                     emissionPopIntensity: { value: settings.emissionPopIntensity / 100 },
                     emissionBoundaryFalloff: { value: settings.emissionBoundaryFalloff / 100 },
+                    emissionFalloffCurve: { value: ['linear', 'quadratic', 'cubic', 'exponential'].indexOf(settings.emissionFalloffCurve) },
                     assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
                     assemblyDirection: { value: settings.assemblyDirection === 'above' ? 1 : settings.assemblyDirection === 'below' ? 2 : 0 },
                     assemblySpread: { value: settings.assemblySpread / 100 },
@@ -1968,6 +1985,7 @@
                     uniform float emissionHeatDuration;
                     uniform float emissionPopIntensity;
                     uniform float emissionBoundaryFalloff;
+                    uniform int emissionFalloffCurve;
                     uniform float assemblyProgress;
                     uniform int assemblyDirection;
                     uniform float assemblySpread;
@@ -2379,12 +2397,27 @@
                                 emissionAlphaEffect = 0.0;
                                 vEmissionSizeMult = 0.0;
                             } else {
-                                // Boundary falloff: effect is strongest RIGHT AT boundary, fades sharply
-                                // falloff goes from ~0 (at boundary) to boundaryThickness (deep in zone)
+                                // Boundary falloff: effect is strongest RIGHT AT boundary, fades based on curve
                                 float distFromBoundary = falloff / boundaryThickness;
-                                // Use power curve for sharper falloff (higher power = sharper)
-                                float falloffPower = 1.0 + emissionBoundaryFalloff * 3.0; // 1-4 power range
-                                float boundaryFactor = pow(1.0 - distFromBoundary, falloffPower);
+                                float falloffStrength = emissionBoundaryFalloff;
+                                
+                                // Apply falloff curve type
+                                float rawFalloff;
+                                if (emissionFalloffCurve == 0) {
+                                    // Linear
+                                    rawFalloff = distFromBoundary;
+                                } else if (emissionFalloffCurve == 1) {
+                                    // Quadratic (faster falloff)
+                                    rawFalloff = distFromBoundary * distFromBoundary;
+                                } else if (emissionFalloffCurve == 2) {
+                                    // Cubic (even faster)
+                                    rawFalloff = distFromBoundary * distFromBoundary * distFromBoundary;
+                                } else {
+                                    // Exponential (sharpest)
+                                    rawFalloff = 1.0 - exp(-distFromBoundary * 5.0);
+                                }
+                                
+                                float boundaryFactor = 1.0 - rawFalloff * falloffStrength;
                                 boundaryFactor = clamp(boundaryFactor, 0.0, 1.0);
                                 
                                 // Per-particle lifecycle timing
@@ -2415,13 +2448,17 @@
                                     // Heat progress: 0 at start, 1 at pop moment
                                     float heatProgress = lifecycle / max(emissionHeatDuration, 0.01);
                                     
-                                    // Glow intensifies as we approach pop, scaled by boundary falloff
-                                    // Stronger glow effect (3x multiplier) for visible heat-up
-                                    float heatGlow = 1.0 + heatProgress * heatProgress * emissionIntensity * 3.0 * boundaryFactor;
-                                    emissionAlphaEffect = mix(0.5, heatGlow, boundaryFactor); // Dim non-boundary particles
+                                    // === HEAT GLOW: Particles heat up in LOCAL position before popping ===
+                                    // Very visible glow that increases dramatically toward pop
+                                    float heatCurve = heatProgress * heatProgress * heatProgress; // Cubic for dramatic ramp
+                                    float heatGlow = 1.0 + heatCurve * emissionIntensity * 5.0 * boundaryFactor;
                                     
-                                    // Size increase during heat-up, scaled by boundary falloff
-                                    vEmissionSizeMult = 1.0 + heatProgress * 0.5 * boundaryFactor;
+                                    // Boundary particles glow bright, others dim significantly
+                                    emissionAlphaEffect = mix(0.3, heatGlow, boundaryFactor);
+                                    
+                                    // Size pulses/grows during heat-up (like expanding before explosion)
+                                    float sizePulse = 1.0 + sin(heatProgress * 6.28318) * 0.1; // Subtle pulse
+                                    vEmissionSizeMult = sizePulse * (1.0 + heatCurve * 0.8 * boundaryFactor);
                                     
                                 } else {
                                     // === POP & FLOAT PHASES ===
@@ -2471,12 +2508,16 @@
                                         easedTime = timeSincePop * timeSincePop * (3.0 - 2.0 * timeSincePop);
                                     }
                                     
-                                    // === POP: Initial burst velocity ===
-                                    // Pop gives instant displacement at the moment of detachment
-                                    float popDist = emissionPopIntensity * 0.3;
+                                    // === POP: Ease-out burst (fast start, slow end) ===
+                                    // Pop happens quickly at the start then slows down
+                                    float popDuration = 0.3; // Pop completes in first 30% of float phase
+                                    float popProgress = min(timeSincePop / popDuration, 1.0);
+                                    float easedPop = 1.0 - pow(1.0 - popProgress, 3.0); // Cubic ease-out
+                                    float popDist = easedPop * emissionPopIntensity * 0.5;
                                     
-                                    // === FLOAT: Gradual drift ===
-                                    float floatDist = easedTime * emissionDrift * 0.5;
+                                    // === FLOAT: Gradual drift (starts after pop settles) ===
+                                    float floatProgress = max(0.0, timeSincePop - popDuration * 0.5) / (1.0 - popDuration * 0.5);
+                                    float floatDist = floatProgress * emissionDrift * 0.5;
                                     
                                     // Total distance = pop + float
                                     float totalDist = popDist + floatDist;
@@ -3134,6 +3175,8 @@
             settings.emissionHeatDuration = parseFloat(document.getElementById('emissionHeatDuration').value);
             settings.emissionPopIntensity = parseFloat(document.getElementById('emissionPopIntensity').value);
             settings.emissionBoundaryFalloff = parseFloat(document.getElementById('emissionBoundaryFalloff').value);
+            settings.emissionBoundaryFalloffMax = parseFloat(document.getElementById('emissionBoundaryFalloffMax').value);
+            settings.emissionFalloffCurve = document.getElementById('emissionFalloffCurve').value;
             // Legacy surface animation
             settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
             settings.surfaceFloatMin = parseFloat(document.getElementById('surfaceFloatMin').value);
@@ -3264,6 +3307,22 @@
                 const easingMap = { 'linear': 0, 'ease-in': 1, 'ease-out': 2, 'ease-in-out': 3 };
                 pointsMesh.material.uniforms.emissionEasing.value = easingMap[settings.emissionEasing];
             }
+        });
+        
+        // Emission falloff curve dropdown
+        document.getElementById('emissionFalloffCurve').addEventListener('change', (e) => {
+            settings.emissionFalloffCurve = e.target.value;
+            if (pointsMesh) {
+                const curveMap = { 'linear': 0, 'quadratic': 1, 'cubic': 2, 'exponential': 3 };
+                pointsMesh.material.uniforms.emissionFalloffCurve.value = curveMap[settings.emissionFalloffCurve];
+            }
+        });
+        
+        // Boundary falloff max input
+        document.getElementById('emissionBoundaryFalloffMax').addEventListener('change', (e) => {
+            const max = parseFloat(e.target.value);
+            settings.emissionBoundaryFalloffMax = max;
+            document.getElementById('emissionBoundaryFalloff').max = max;
         });
         
         setupSlider('glow', 'glow', false, false);

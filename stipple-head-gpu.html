@@ -2349,7 +2349,7 @@
                                                   awayFromCamera * cameraAmount + 
                                                   screenUp * upwardAmount;
                                 
-                                vec3 cameraDriftDir = length(totalDrift) > 0.001 ? normalize(totalDrift) : worldUp;
+                                vec3 cameraDriftDir = length(totalDrift) > 0.001 ? normalize(totalDrift) : screenUp;
                                 
                                 // Per-particle direction variation
                                 vec3 particleVariation = normalize(drift);

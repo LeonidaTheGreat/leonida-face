@@ -1,104 +1,75 @@
-# Leonida Face/Voice/GUI Prototype
+# Leonida Face 🦁
 
-A prototype exploring visual and audio presence for Leonida beyond Telegram text chat.
+A 3D avatar system for Leonida with real-time lip sync, expressive animations, and distinctive visual styles.
 
 ## Quick Start
 
 ```bash
-# Simple HTTP server
-cd /Users/clawdbot/clawd/projects/leonida-face
-python3 -m http.server 8080
+# Start local server
+cd /Users/clawdbot/clawd/leonida-face
+python3 -m http.server 8083
 
-# Then open http://localhost:8080
+# Open in Chrome (needs WebGL)
+open http://localhost:8083/talkinghead-clawdbot.html
 ```
 
-## Features (Prototype v0.1)
+## Features
 
-- **Simple Animated Avatar**: CSS-based lion face with expressions
-- **Voice Output**: Web Speech API fallback, ElevenLabs ready
-- **Lip Sync Simulation**: Mouth animates during speech
-- **Mood System**: Happy, thinking expressions
-- **Chat Interface**: Basic message display
+- **Lip Sync** - Real-time mouth animation from ElevenLabs TTS
+- **AI Chat** - Connected to Clawdbot Gateway
+- **Visual Styles** - Particles, voxels, plexus effects (WIP)
+- **Expressions** - Mood-based facial animations
 
-## Architecture Options Researched
-
-### 1. 🏆 RECOMMENDED: TalkingHead + Web Dashboard
-**Best balance of effort vs results**
-
-- **TalkingHead library**: JavaScript class for Ready Player Me avatars
-- **Features**: Real-time lip-sync, expressions, moods, poses
-- **ElevenLabs**: Already integrated, supports word-level timestamps
-- **Deployment**: Web app accessible from any device
+## Project Structure
 
 ```
-Clawdbot Backend ──► WebSocket ──► Web Dashboard
-                                      │
-                                      ▼
-                               TalkingHead.js
-                                      │
-                                      ▼
-                          Ready Player Me Avatar
-                            + ElevenLabs TTS
+leonida-face/
+├── CLAUDE.md              # AI agent context (read this first)
+├── README.md              # This file
+├── RENDERING_STYLES.md    # Visual styles documentation
+├── AVATAR_RESEARCH.md     # Avatar creation options
+├── SETUP.md               # Setup guide
+│
+├── talkinghead-clawdbot.html  # Main avatar hub
+├── talkinghead-minimal.html   # Minimal TalkingHead demo
+├── stipple-head-gpu.html      # Particle rendering system
+│
+├── models/                # 3D model files (GLB)
+└── .claude/commands/      # Claude Code commands
 ```
 
-### 2. Open-LLM-VTuber
-**Most feature-complete but heavier**
+## Documentation
 
-- Full Live2D VTuber setup
-- Voice interruption, visual perception
-- Desktop pet mode
-- More setup overhead
+| Document | Purpose |
+|----------|---------|
+| [CLAUDE.md](CLAUDE.md) | Project context for AI agents |
+| [RENDERING_STYLES.md](RENDERING_STYLES.md) | Visual styles (particles, voxels, plexus) |
+| [AVATAR_RESEARCH.md](AVATAR_RESEARCH.md) | Avatar creation and model requirements |
+| [SETUP.md](SETUP.md) | Detailed setup instructions |
 
-### 3. Tauri Menu Bar App
-**Native macOS integration**
+## Tech Stack
 
-- Lightweight, native performance
-- Good for quick-access floating window
-- Can embed web view for avatar
+- **Three.js** - WebGL 3D rendering
+- **TalkingHead.js** - Avatar animation library
+- **ElevenLabs** - Text-to-speech with timestamps
+- **Clawdbot Gateway** - AI backend
 
-### 4. Electron Desktop App
-**Cross-platform but heavy**
+## Current Status
 
-- LLM-Live2D-Desktop-Assistant uses this
-- ~100MB+ bundle size
-- Full window/transparency control
+**Branch:** `vrm-talkinghead`
 
-## Implementation Roadmap
+- ✅ TalkingHead + ElevenLabs integration
+- ✅ Clawdbot Gateway chat API
+- ✅ Particle rendering system
+- 🔄 Reconciling rendering styles
+- 📋 Custom Leonida avatar
 
-### Phase 1: Web Dashboard (1-2 days)
-1. Integrate TalkingHead library
-2. Create/import Ready Player Me avatar
-3. Connect to Clawdbot via WebSocket
-4. Add ElevenLabs TTS with lip-sync
+## Requirements
 
-### Phase 2: Desktop Presence (3-5 days)
-1. Tauri wrapper for menu bar access
-2. Floating window mode
-3. Global hotkey activation
-4. System tray integration
+- Chrome/Firefox with WebGL support
+- ElevenLabs API key (for voice)
+- Clawdbot Gateway running (for AI chat)
 
-### Phase 3: Full Integration (1-2 weeks)
-1. Two-way voice (Talk mode)
-2. Screen awareness (optional)
-3. Animated expressions from mood
-4. Persistent chat context
+## License
 
-## Files
-
-- `index.html` - Prototype web UI with simple animated avatar
-- `README.md` - This file
-
-## Next Steps
-
-1. Create Ready Player Me avatar for Leonida
-2. Set up TalkingHead integration
-3. Add WebSocket connection to Clawdbot
-4. Build Tauri wrapper for macOS
-
-## Resources
-
-- [TalkingHead](https://github.com/met4citizen/TalkingHead) - 3D avatar with lip-sync
-- [Ready Player Me](https://readyplayer.me/) - Avatar creation
-- [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber) - Full VTuber setup
-- [Tauri](https://tauri.app/) - Lightweight desktop apps
-- [pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) - Web Live2D
+Private project for Leonida assistant.

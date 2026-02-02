@@ -2313,25 +2313,18 @@
                         // Size reduction toward back + emission decay
                         float sizeScale = (1.0 - falloff * 0.5) * vEmissionSizeMult;
                         
-                        // === World position with detachment ===
-                        vec4 worldPos;
+                        // === Final position calculation ===
+                        vec4 mvPosition;
                         
                         if (emissionActive > 0.5) {
-                            // Emitted particles: use pre-computed world position
-                            // This makes them truly world-fixed, independent of model animation
-                            worldPos = vec4(emissionWorldPos, 1.0);
-                        } else if (falloff > 0.01) {
-                            // Non-emission dissipation: blend between current and frozen transform
-                            vec3 attachedWorld = (modelMatrix * vec4(pos, 1.0)).xyz;
-                            vec3 frozenWorld = (frozenModelMatrix * vec4(pos, 1.0)).xyz;
-                            vec3 blendedWorld = mix(attachedWorld, frozenWorld, falloff);
-                            worldPos = vec4(blendedWorld + dissipationWorldOffset, 1.0);
+                            // DETACHED particles: world space → viewMatrix only
+                            vec4 worldPos = vec4(emissionWorldPos, 1.0);
+                            mvPosition = viewMatrix * worldPos;
                         } else {
-                            // Front particles: attached to model
-                            worldPos = modelMatrix * vec4(pos, 1.0);
+                            // ATTACHED particles: local space → modelViewMatrix
+                            // They follow the model animation naturally
+                            mvPosition = modelViewMatrix * vec4(pos, 1.0);
                         }
-                        
-                        vec4 mvPosition = viewMatrix * worldPos;
                         gl_PointSize = size * sizeScale * (80.0 / -mvPosition.z);
                         gl_Position = projectionMatrix * mvPosition;
                     }

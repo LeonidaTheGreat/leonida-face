@@ -343,8 +343,23 @@
         </div>
         
         <div class="slider-row">
+            <label>Initial Intensity (evaporation glow at spawn)</label>
+            <input type="range" id="emissionIntensity" min="100" max="500" value="200">
+        </div>
+        
+        <div class="slider-row">
             <label>Fade Start (% of lifecycle before fading)</label>
             <input type="range" id="emissionFadeStart" min="0" max="100" value="40">
+        </div>
+        
+        <div class="slider-row">
+            <label>Emission Easing</label>
+            <select id="emissionEasing">
+                <option value="linear">Linear</option>
+                <option value="ease-in">Ease In (slow start)</option>
+                <option value="ease-out" selected>Ease Out (slow end)</option>
+                <option value="ease-in-out">Ease In-Out</option>
+            </select>
         </div>
         
         <div class="slider-row">
@@ -595,7 +610,9 @@
             emissionDriftMax: 200,
             emissionDirection: 30,
             emissionTurbulence: 20,
+            emissionIntensity: 200,
             emissionFadeStart: 40,
+            emissionEasing: 'ease-out',
             emissionSizeDecay: 50,
             // Legacy surface animation
             surfaceFloat: 3,
@@ -701,7 +718,9 @@
             
             document.getElementById('emissionDirection').value = settings.emissionDirection;
             document.getElementById('emissionTurbulence').value = settings.emissionTurbulence;
+            document.getElementById('emissionIntensity').value = settings.emissionIntensity;
             document.getElementById('emissionFadeStart').value = settings.emissionFadeStart;
+            document.getElementById('emissionEasing').value = settings.emissionEasing;
             document.getElementById('emissionSizeDecay').value = settings.emissionSizeDecay;
             
             // Legacy surface animation
@@ -1750,7 +1769,9 @@
                     emissionDrift: { value: settings.emissionDrift / 100 },
                     emissionDirection: { value: settings.emissionDirection / 100 },
                     emissionTurbulence: { value: settings.emissionTurbulence / 100 },
+                    emissionIntensity: { value: settings.emissionIntensity / 100 },
                     emissionFadeStart: { value: settings.emissionFadeStart / 100 },
+                    emissionEasing: { value: settings.emissionEasing === 'ease-in' ? 1 : settings.emissionEasing === 'ease-out' ? 2 : settings.emissionEasing === 'ease-in-out' ? 3 : 0 },
                     emissionSizeDecay: { value: settings.emissionSizeDecay / 100 },
                     assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
                     assemblyDirection: { value: settings.assemblyDirection === 'above' ? 1 : settings.assemblyDirection === 'below' ? 2 : 0 },
@@ -1828,7 +1849,9 @@
                     uniform float emissionDrift;
                     uniform float emissionDirection;
                     uniform float emissionTurbulence;
+                    uniform float emissionIntensity;
                     uniform float emissionFadeStart;
+                    uniform int emissionEasing;
                     uniform float emissionSizeDecay;
                     uniform float assemblyProgress;
                     uniform int assemblyDirection;
@@ -2229,10 +2252,9 @@
                         vec3 emissionWorldPos = vec3(0.0);
                         
                         if (emissionEnabled > 0.5 && falloff > 0.01) {
-                            // Only emit particles NEAR the Effect Start boundary
-                            // Particles further back are hidden (alpha=0)
-                            // This creates a "plane of emission" effect
-                            float boundaryThickness = 0.3; // How thick the emission zone is
+                            // Only emit particles AT the Effect Start boundary plane
+                            // Particles further back are hidden - creates "evaporation edge" effect
+                            float boundaryThickness = 0.15; // Thin emission zone at boundary
                             
                             if (falloff > boundaryThickness) {
                                 // Too far past boundary - hide this particle
@@ -2250,18 +2272,11 @@
                                 float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
                                 
                                 // === CAMERA-RELATIVE EMISSION ===
-                                // Matches the Effect Start plane reference frame
-                                // Particles drift AWAY from camera (same direction as dissipation)
-                                
                                 // Use CPU-tracked spawn position (frozen at respawn time)
-                                // This is set by CPU when particle lifecycle resets
                                 vec3 frozenSpawnPos = spawnWorldPosition;
                                 
-                                // Drift direction = away from camera (matches Effect Start reference)
-                                // cameraDir points where camera looks, so particles drift along +cameraDir (away)
+                                // Drift direction = away from camera
                                 vec3 awayFromCamera = cameraDir;
-                                
-                                // Add some spread/variation 
                                 vec3 worldUp = vec3(0.0, 1.0, 0.0);
                                 vec3 cameraDriftDir = normalize(mix(awayFromCamera, worldUp, emissionDirection * 0.5));
                                 
@@ -2269,7 +2284,7 @@
                                 vec3 particleVariation = normalize(drift);
                                 vec3 worldDriftDir = normalize(cameraDriftDir + particleVariation * 0.3);
                                 
-                                // Add turbulence in world space
+                                // Add turbulence
                                 if (emissionTurbulence > 0.0) {
                                     float turbPhase = lifecycle * 6.28318 + seeds.w * 3.14159;
                                     vec3 turbOffset = vec3(
@@ -2280,21 +2295,50 @@
                                     worldDriftDir = normalize(worldDriftDir + turbOffset * emissionTurbulence * 0.5);
                                 }
                                 
-                                // Drift distance (ease-out curve)
-                                float driftProgress = 1.0 - pow(1.0 - lifecycle, 2.0);
-                                float driftDist = driftProgress * emissionDrift * 0.5;
+                                // Apply easing to lifecycle for drift
+                                float easedLifecycle;
+                                if (emissionEasing == 0) {
+                                    easedLifecycle = lifecycle; // Linear
+                                } else if (emissionEasing == 1) {
+                                    easedLifecycle = lifecycle * lifecycle; // Ease-in
+                                } else if (emissionEasing == 2) {
+                                    easedLifecycle = 1.0 - pow(1.0 - lifecycle, 2.0); // Ease-out
+                                } else {
+                                    easedLifecycle = lifecycle * lifecycle * (3.0 - 2.0 * lifecycle); // Ease-in-out
+                                }
                                 
-                                // Final position = FROZEN spawn point + camera-relative drift
-                                // frozenSpawnPos is set by CPU and doesn't change with animation
+                                // Drift distance
+                                float driftDist = easedLifecycle * emissionDrift * 0.5;
+                                
+                                // Final position = FROZEN spawn point + drift
                                 emissionWorldPos = frozenSpawnPos + worldDriftDir * driftDist;
                                 
-                                // Alpha fade based on lifecycle
-                                float fadeProgress = max(0.0, (lifecycle - emissionFadeStart) / (1.0 - emissionFadeStart + 0.001));
-                                emissionAlphaEffect = 1.0 - fadeProgress;
-                                emissionAlphaEffect = clamp(emissionAlphaEffect, 0.0, 1.0);
+                                // === EVAPORATION EFFECT ===
+                                // High intensity at spawn, fading over lifecycle
+                                // Initial intensity boost creates "evaporating" glow
+                                float intensityBoost = emissionIntensity * (1.0 - easedLifecycle);
                                 
-                                // Size decay
-                                vEmissionSizeMult = 1.0 - lifecycle * emissionSizeDecay;
+                                // Alpha: starts at intensity, fades based on fadeStart
+                                float fadeProgress = max(0.0, (lifecycle - emissionFadeStart) / (1.0 - emissionFadeStart + 0.001));
+                                
+                                // Apply easing to fade
+                                float easedFade;
+                                if (emissionEasing == 0) {
+                                    easedFade = fadeProgress;
+                                } else if (emissionEasing == 1) {
+                                    easedFade = fadeProgress * fadeProgress;
+                                } else if (emissionEasing == 2) {
+                                    easedFade = 1.0 - pow(1.0 - fadeProgress, 2.0);
+                                } else {
+                                    easedFade = fadeProgress * fadeProgress * (3.0 - 2.0 * fadeProgress);
+                                }
+                                
+                                // Combine intensity boost with fade
+                                emissionAlphaEffect = (1.0 + intensityBoost) * (1.0 - easedFade);
+                                emissionAlphaEffect = clamp(emissionAlphaEffect, 0.0, 3.0); // Allow > 1 for glow
+                                
+                                // Size: larger at spawn (evaporation burst), shrinks over time
+                                vEmissionSizeMult = (1.0 + intensityBoost * 0.3) * (1.0 - lifecycle * emissionSizeDecay);
                                 vEmissionSizeMult = max(vEmissionSizeMult, 0.1);
                             }
                         }
@@ -2984,13 +3028,22 @@
         setupEmissionSlider('emissionDrift', 'emissionDrift');
         
         // Emission sliders without min/max
-        ['emissionDirection', 'emissionTurbulence', 'emissionFadeStart', 'emissionSizeDecay'].forEach(id => {
+        ['emissionDirection', 'emissionTurbulence', 'emissionIntensity', 'emissionFadeStart', 'emissionSizeDecay'].forEach(id => {
             document.getElementById(id).addEventListener('input', (e) => {
                 settings[id] = parseFloat(e.target.value);
                 if (pointsMesh) {
                     pointsMesh.material.uniforms[id].value = settings[id] / 100;
                 }
             });
+        });
+        
+        // Emission easing dropdown
+        document.getElementById('emissionEasing').addEventListener('change', (e) => {
+            settings.emissionEasing = e.target.value;
+            if (pointsMesh) {
+                const easingMap = { 'linear': 0, 'ease-in': 1, 'ease-out': 2, 'ease-in-out': 3 };
+                pointsMesh.material.uniforms.emissionEasing.value = easingMap[settings.emissionEasing];
+            }
         });
         
         setupSlider('glow', 'glow', false, false);

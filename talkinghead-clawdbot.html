@@ -668,8 +668,10 @@
     }
 
     // ============================================
-    // Chat
+    // Chat via OpenAI-compatible HTTP API
     // ============================================
+    let chatHistory = [];
+    
     async function sendChat() {
       const input = elements.chatInput;
       const text = input?.value?.trim();
@@ -678,24 +680,58 @@
       
       input.value = '';
       addMessage('user', text);
+      updateOverlayStatus('Thinking...', false);
       
-      // For now, just trigger speech directly (testing)
-      // In full integration, this would go through Gateway
-      if (!gatewaySocket || gatewaySocket.readyState !== WebSocket.OPEN) {
-        // Demo mode: echo back
-        setTimeout(() => {
-          const response = `You said: "${text}". I'm Leonida, your AI assistant!`;
+      // Add to chat history
+      chatHistory.push({ role: 'user', content: text });
+      
+      // Get Gateway URL (convert WS to HTTP)
+      const wsUrl = elements.gatewayUrl?.value || CONFIG.gateway.url;
+      const httpUrl = wsUrl.replace('ws://', 'http://').replace('wss://', 'https://');
+      const token = elements.gatewayToken?.value || CONFIG.gateway.token;
+      
+      try {
+        const response = await fetch(`${httpUrl}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            'x-clawdbot-agent-id': 'main'
+          },
+          body: JSON.stringify({
+            model: 'clawdbot',
+            messages: chatHistory,
+            stream: false
+          })
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        const assistantMessage = data.choices?.[0]?.message?.content || 'No response';
+        
+        // Add to history and display
+        chatHistory.push({ role: 'assistant', content: assistantMessage });
+        addMessage('assistant', assistantMessage);
+        
+        // Speak the response
+        speakText(assistantMessage);
+        
+      } catch (error) {
+        console.error('[Chat] Error:', error);
+        
+        // Fallback to demo mode if Gateway not available
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          addMessage('system', 'Gateway not available - using demo mode');
+          const response = `You said: "${text}". I'm Leonida! Connect to the Gateway for real AI responses.`;
           addMessage('assistant', response);
           speakText(response);
-        }, 500);
-      } else {
-        // Send to Gateway (implement based on your Gateway API)
-        try {
-          // This would be your Gateway's chat API
-          // await sendToGateway('chat.send', { message: text });
-          addMessage('system', 'Gateway chat not yet implemented');
-        } catch (error) {
-          addMessage('system', 'Error: ' + error.message);
+        } else {
+          addMessage('system', `Error: ${error.message}`);
+          updateOverlayStatus('Error', false);
         }
       }
     }

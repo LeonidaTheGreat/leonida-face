@@ -2212,56 +2212,67 @@
                         vec3 emissionWorldPos = vec3(0.0);
                         
                         if (emissionEnabled > 0.5 && falloff > 0.01) {
-                            emissionActive = 1.0;
+                            // Only emit particles NEAR the Effect Start boundary
+                            // Particles further back are hidden (alpha=0)
+                            // This creates a "plane of emission" effect
+                            float boundaryThickness = 0.3; // How thick the emission zone is
                             
-                            // Per-particle lifecycle timing
-                            float cycleSpeed = emissionSpeed * 0.5;
-                            float phaseOffset = seeds.x * 6.28318 + seeds.y * 3.14159;
-                            float speedVariation = 0.7 + seeds.z * 0.6;
-                            
-                            // Lifecycle phase: 0 = just spawned, 1 = about to respawn
-                            float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
-                            
-                            // === WORLD SPACE EMISSION ===
-                            // Convert ANIMATED local position to world space
-                            // basePosition includes GPU skinning, so particles spawn from current pose
-                            vec3 animatedWorldPos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
-                            
-                            // Compute drift direction in WORLD SPACE
-                            vec3 worldRadial = normalize(animatedWorldPos);
-                            vec3 worldUp = vec3(0.0, 1.0, 0.0);
-                            vec3 worldDriftDir = normalize(mix(worldRadial, worldUp, emissionDirection));
-                            
-                            // Per-particle direction variation (transform drift to world space)
-                            vec3 worldDrift = normalize(mat3(modelMatrix) * drift);
-                            worldDriftDir = normalize(worldDriftDir + worldDrift * 0.3);
-                            
-                            // Add turbulence in world space
-                            if (emissionTurbulence > 0.0) {
-                                float turbPhase = lifecycle * 6.28318 + seeds.w * 3.14159;
-                                vec3 turbOffset = vec3(
-                                    sin(turbPhase + seeds.x * 10.0) * cos(turbPhase * 1.3),
-                                    sin(turbPhase * 0.7 + seeds.y * 10.0),
-                                    cos(turbPhase * 1.1 + seeds.z * 10.0)
-                                );
-                                worldDriftDir = normalize(worldDriftDir + turbOffset * emissionTurbulence * 0.5);
+                            if (falloff > boundaryThickness) {
+                                // Too far past boundary - hide this particle
+                                emissionAlphaEffect = 0.0;
+                                vEmissionSizeMult = 0.0;
+                            } else {
+                                emissionActive = 1.0;
+                                
+                                // Per-particle lifecycle timing
+                                float cycleSpeed = emissionSpeed * 0.5;
+                                float phaseOffset = seeds.x * 6.28318 + seeds.y * 3.14159;
+                                float speedVariation = 0.7 + seeds.z * 0.6;
+                                
+                                // Lifecycle phase: 0 = just spawned, 1 = about to respawn
+                                float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
+                                
+                                // === WORLD SPACE EMISSION ===
+                                // Use REST position for stable world coordinates
+                                // (animated position changes every frame, can't truly detach)
+                                vec3 restWorldPos = (modelMatrix * vec4(constellationPosition, 1.0)).xyz;
+                                
+                                // Compute drift direction in WORLD SPACE
+                                vec3 worldRadial = normalize(restWorldPos);
+                                vec3 worldUp = vec3(0.0, 1.0, 0.0);
+                                vec3 worldDriftDir = normalize(mix(worldRadial, worldUp, emissionDirection));
+                                
+                                // Per-particle direction variation
+                                vec3 worldDrift = normalize(mat3(modelMatrix) * drift);
+                                worldDriftDir = normalize(worldDriftDir + worldDrift * 0.3);
+                                
+                                // Add turbulence in world space
+                                if (emissionTurbulence > 0.0) {
+                                    float turbPhase = lifecycle * 6.28318 + seeds.w * 3.14159;
+                                    vec3 turbOffset = vec3(
+                                        sin(turbPhase + seeds.x * 10.0) * cos(turbPhase * 1.3),
+                                        sin(turbPhase * 0.7 + seeds.y * 10.0),
+                                        cos(turbPhase * 1.1 + seeds.z * 10.0)
+                                    );
+                                    worldDriftDir = normalize(worldDriftDir + turbOffset * emissionTurbulence * 0.5);
+                                }
+                                
+                                // Drift distance (ease-out curve)
+                                float driftProgress = 1.0 - pow(1.0 - lifecycle, 2.0);
+                                float driftDist = driftProgress * emissionDrift * 0.5;
+                                
+                                // Final world position = rest spawn point + world drift
+                                emissionWorldPos = restWorldPos + worldDriftDir * driftDist;
+                                
+                                // Alpha fade based on lifecycle
+                                float fadeProgress = max(0.0, (lifecycle - emissionFadeStart) / (1.0 - emissionFadeStart + 0.001));
+                                emissionAlphaEffect = 1.0 - fadeProgress;
+                                emissionAlphaEffect = clamp(emissionAlphaEffect, 0.0, 1.0);
+                                
+                                // Size decay
+                                vEmissionSizeMult = 1.0 - lifecycle * emissionSizeDecay;
+                                vEmissionSizeMult = max(vEmissionSizeMult, 0.1);
                             }
-                            
-                            // Drift distance (ease-out curve)
-                            float driftProgress = 1.0 - pow(1.0 - lifecycle, 2.0);
-                            float driftDist = driftProgress * emissionDrift * 0.5 * falloff;
-                            
-                            // Final world position = animated spawn point + world drift
-                            emissionWorldPos = animatedWorldPos + worldDriftDir * driftDist;
-                            
-                            // Alpha fade based on lifecycle
-                            float fadeProgress = max(0.0, (lifecycle - emissionFadeStart) / (1.0 - emissionFadeStart + 0.001));
-                            emissionAlphaEffect = 1.0 - fadeProgress;
-                            emissionAlphaEffect = clamp(emissionAlphaEffect, 0.0, 1.0);
-                            
-                            // Size decay
-                            vEmissionSizeMult = 1.0 - lifecycle * emissionSizeDecay * falloff;
-                            vEmissionSizeMult = max(vEmissionSizeMult, 0.1);
                         }
                         
                         // Alpha based on dissipation + emission

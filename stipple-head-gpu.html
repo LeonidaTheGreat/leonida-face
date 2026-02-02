@@ -1807,7 +1807,7 @@
                 spawnAttr,
                 seeds: seeds,
                 count: count,
-                forceUpdateFrames: 60 // Force update all spawn positions for first 60 frames
+                forceUpdateFrames: 2 // Force update all spawn positions for first 2 frames (enough to capture animated pose)
             };
             
             const shapeVal = settings.shape === 'circle' ? 0 : (settings.shape === 'square' ? 1 : 2);
@@ -2352,8 +2352,8 @@
                                 
                                 // === CAMERA-RELATIVE EMISSION ===
                                 // Use CPU-tracked spawn position (frozen at respawn time)
-                                // Apply model offset so particles move with model
-                                vec3 frozenSpawnPos = spawnWorldPosition + modelOffset;
+                                // spawnWorldPosition is already in world space (includes model offset via matrixWorld)
+                                vec3 frozenSpawnPos = spawnWorldPosition;
                                 
                                 // === PHASED DRIFT DIRECTION ===
                                 // Radial and Camera drift fade out over their duration

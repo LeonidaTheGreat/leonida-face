@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TalkingHead Minimal - Leonida Face</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    * { box-sizing: border-box; }
+    body, html { 
+      width: 100%; 
+      height: 100%; 
+      margin: 0; 
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e0e0e0;
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    #avatar {
+      flex: 1;
+      min-height: 400px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    
+    .controls {
+      padding: 20px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+    
+    #text-input {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 16px;
+      border: 2px solid #3a3a5c;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    #text-input:focus {
+      border-color: #6c63ff;
+    }
+    #text-input::placeholder {
+      color: #888;
+    }
+    
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    #speak-btn {
+      background: linear-gradient(135deg, #6c63ff 0%, #5a52d5 100%);
+      color: white;
+    }
+    #speak-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(108, 99, 255, 0.4);
+    }
+    #speak-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    #test-btn {
+      background: #2d2d44;
+      color: #e0e0e0;
+    }
+    #test-btn:hover {
+      background: #3a3a5c;
+    }
+    
+    .options-row {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    
+    .option-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    label {
+      font-size: 14px;
+      color: #aaa;
+    }
+    
+    select {
+      padding: 8px 12px;
+      font-size: 14px;
+      border: 2px solid #3a3a5c;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      outline: none;
+      cursor: pointer;
+    }
+    select:focus {
+      border-color: #6c63ff;
+    }
+    
+    #status {
+      font-size: 14px;
+      color: #888;
+      text-align: center;
+      min-height: 20px;
+    }
+    
+    #api-key-section {
+      margin-bottom: 10px;
+      padding: 15px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      border: 1px solid #3a3a5c;
+    }
+    
+    #api-key-input {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 14px;
+      border: 2px solid #3a3a5c;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      outline: none;
+      margin-top: 8px;
+    }
+    #api-key-input:focus {
+      border-color: #6c63ff;
+    }
+    
+    .api-note {
+      font-size: 12px;
+      color: #666;
+      margin-top: 6px;
+    }
+  </style>
+
+  <script type="importmap">
+  { "imports":
+    {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.7/modules/talkinghead.mjs"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import { TalkingHead } from "talkinghead";
+
+    // ElevenLabs config
+    const ELEVENLABS_VOICE_ID = "TxGEqnHWrfWFTfGW9XjX"; // Josh
+    const ELEVENLABS_MODEL = "eleven_multilingual_v2";
+    
+    // Test phrases
+    const TEST_PHRASES = [
+      "Hello! I'm your AI assistant. How can I help you today?",
+      "The quick brown fox jumps over the lazy dog.",
+      "Welcome to the TalkingHead demo! This is a test of the speech synthesis system.",
+      "I can express different emotions through my facial expressions and body language."
+    ];
+
+    let head = null;
+    let elevenSocket = null;
+    let elevenInputMsgs = [];
+    let elevenOutputMsg = null;
+    let isSpeaking = false;
+
+    // DOM elements
+    const statusEl = document.getElementById('status');
+    const speakBtn = document.getElementById('speak-btn');
+    const testBtn = document.getElementById('test-btn');
+    const textInput = document.getElementById('text-input');
+    const moodSelect = document.getElementById('mood-select');
+    const apiKeyInput = document.getElementById('api-key-input');
+
+    function updateStatus(msg) {
+      statusEl.textContent = msg;
+      console.log('[Status]', msg);
+    }
+
+    function setButtonState(speaking) {
+      isSpeaking = speaking;
+      speakBtn.disabled = speaking;
+      speakBtn.textContent = speaking ? 'Speaking...' : 'Speak';
+    }
+
+    // ElevenLabs WebSocket TTS
+    async function speakWithElevenLabs(text) {
+      const apiKey = apiKeyInput.value.trim();
+      if (!apiKey) {
+        updateStatus('⚠️ Please enter your ElevenLabs API key');
+        return;
+      }
+
+      if (!text.trim()) {
+        updateStatus('⚠️ Please enter some text to speak');
+        return;
+      }
+
+      setButtonState(true);
+      updateStatus('🎤 Connecting to ElevenLabs...');
+
+      // Close existing socket if any
+      if (elevenSocket && elevenSocket.readyState === WebSocket.OPEN) {
+        elevenSocket.close();
+      }
+
+      // Build WebSocket URL
+      const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream-input?model_id=${ELEVENLABS_MODEL}&output_format=pcm_22050&auto_mode=true&apply_text_normalization=off`;
+
+      // Prepare messages
+      elevenInputMsgs = [
+        {
+          "text": " ",
+          "voice_settings": { "stability": 0.8, "similarity_boost": true },
+          "generation_config": { "chunk_length_schedule": [500, 500, 500, 500] },
+          "xi_api_key": apiKey
+        },
+        {
+          "text": text,
+          "try_trigger_generation": false,
+          "flush": true
+        }
+      ];
+
+      try {
+        elevenSocket = new WebSocket(wsUrl);
+
+        elevenSocket.onopen = function() {
+          updateStatus('🎤 Generating speech...');
+          elevenOutputMsg = null;
+          while (elevenInputMsgs.length > 0) {
+            elevenSocket.send(JSON.stringify(elevenInputMsgs.shift()));
+          }
+        };
+
+        elevenSocket.onmessage = function(event) {
+          const r = JSON.parse(event.data);
+
+          // Speak audio when we have final or normalized alignment
+          if ((r.isFinal || r.normalizedAlignment) && elevenOutputMsg) {
+            updateStatus('🗣️ Speaking...');
+            head.speakAudio(elevenOutputMsg, { lipsyncLang: 'en' });
+            elevenOutputMsg = null;
+          }
+
+          if (!r.isFinal) {
+            // New audio part
+            if (r.alignment) {
+              elevenOutputMsg = { audio: [], words: [], wtimes: [], wdurations: [] };
+
+              // Parse chars to words
+              let word = '';
+              let time = 0;
+              let duration = 0;
+              for (let i = 0; i < r.alignment.chars.length; i++) {
+                if (word.length === 0) time = r.alignment.charStartTimesMs[i];
+                if (word.length && r.alignment.chars[i] === ' ') {
+                  elevenOutputMsg.words.push(word);
+                  elevenOutputMsg.wtimes.push(time);
+                  elevenOutputMsg.wdurations.push(duration);
+                  word = '';
+                  duration = 0;
+                } else {
+                  duration += r.alignment.charDurationsMs[i];
+                  word += r.alignment.chars[i];
+                }
+              }
+              if (word.length) {
+                elevenOutputMsg.words.push(word);
+                elevenOutputMsg.wtimes.push(time);
+                elevenOutputMsg.wdurations.push(duration);
+              }
+            }
+
+            // Add audio content
+            if (r.audio && elevenOutputMsg) {
+              elevenOutputMsg.audio.push(head.b64ToArrayBuffer(r.audio));
+            }
+          }
+        };
+
+        elevenSocket.onerror = function(error) {
+          console.error('WebSocket error:', error);
+          updateStatus('❌ Connection error. Check your API key.');
+          setButtonState(false);
+        };
+
+        elevenSocket.onclose = function(event) {
+          if (event.wasClean) {
+            updateStatus('✓ Ready');
+          } else {
+            updateStatus('⚠️ Connection closed unexpectedly');
+          }
+          setButtonState(false);
+          elevenSocket = null;
+        };
+
+      } catch (error) {
+        console.error('Failed to connect:', error);
+        updateStatus('❌ Failed to connect to ElevenLabs');
+        setButtonState(false);
+      }
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async function() {
+      updateStatus('🔄 Initializing...');
+
+      const avatarContainer = document.getElementById('avatar');
+
+      // Create TalkingHead instance
+      head = new TalkingHead(avatarContainer, {
+        lipsyncModules: ["en"],
+        cameraView: "upper",
+        cameraRotateEnable: true,
+        cameraPanEnable: false,
+        cameraZoomEnable: true
+      });
+
+      // Load avatar
+      try {
+        updateStatus('🔄 Loading avatar...');
+        
+        // Ready Player Me avatar with required morph targets
+        // Note: Ready Player Me is shutting down Jan 31, 2026
+        const avatarUrl = 'https://models.readyplayer.me/64bfa15f0e72c63d7c3934a6.glb?morphTargets=ARKit,Oculus+Visemes,mouthOpen,mouthSmile,eyesClosed,eyesLookUp,eyesLookDown&textureSizeLimit=1024&textureFormat=png';
+
+        await head.showAvatar({
+          url: avatarUrl,
+          body: 'F',
+          avatarMood: 'neutral',
+          lipsyncLang: 'en'
+        }, (ev) => {
+          if (ev.lengthComputable) {
+            const pct = Math.round(ev.loaded / ev.total * 100);
+            updateStatus(`🔄 Loading avatar... ${pct}%`);
+          }
+        });
+
+        updateStatus('✓ Ready - Enter your ElevenLabs API key to start');
+
+      } catch (error) {
+        console.error('Failed to load avatar:', error);
+        updateStatus('❌ Failed to load avatar: ' + error.message);
+      }
+
+      // Event listeners
+      speakBtn.addEventListener('click', () => {
+        speakWithElevenLabs(textInput.value);
+      });
+
+      testBtn.addEventListener('click', () => {
+        const randomPhrase = TEST_PHRASES[Math.floor(Math.random() * TEST_PHRASES.length)];
+        textInput.value = randomPhrase;
+        speakWithElevenLabs(randomPhrase);
+      });
+
+      textInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !isSpeaking) {
+          speakWithElevenLabs(textInput.value);
+        }
+      });
+
+      moodSelect.addEventListener('change', () => {
+        const mood = moodSelect.value;
+        head.setMood(mood);
+        updateStatus(`Mood set to: ${mood}`);
+      });
+
+      // Handle visibility changes
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          head.start();
+        } else {
+          head.stop();
+        }
+      });
+    });
+  </script>
+</head>
+
+<body>
+  <div class="container">
+    <div id="avatar"></div>
+    
+    <div class="controls">
+      <div id="api-key-section">
+        <label for="api-key-input">🔑 ElevenLabs API Key:</label>
+        <input type="password" id="api-key-input" placeholder="Enter your ElevenLabs API key...">
+        <div class="api-note">Your API key is only used locally and never stored. Get one at <a href="https://elevenlabs.io" target="_blank" style="color: #6c63ff;">elevenlabs.io</a></div>
+      </div>
+      
+      <div class="input-row">
+        <input type="text" id="text-input" placeholder="Type something for the avatar to say...">
+        <button id="speak-btn">Speak</button>
+        <button id="test-btn">Test</button>
+      </div>
+      
+      <div class="options-row">
+        <div class="option-group">
+          <label for="mood-select">Mood:</label>
+          <select id="mood-select">
+            <option value="neutral">😐 Neutral</option>
+            <option value="happy">😊 Happy</option>
+            <option value="sad">😢 Sad</option>
+            <option value="angry">😠 Angry</option>
+            <option value="fear">😨 Fear</option>
+            <option value="disgust">🤢 Disgust</option>
+            <option value="love">😍 Love</option>
+            <option value="sleep">😴 Sleep</option>
+          </select>
+        </div>
+      </div>
+      
+      <div id="status">Loading...</div>
+    </div>
+  </div>
+</body>
+</html>

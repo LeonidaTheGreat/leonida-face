@@ -1661,6 +1661,8 @@
             const sizes = new Float32Array(count);
             const seeds = new Float32Array(count * 4);
             const drifts = new Float32Array(count * 3);
+            const spawnWorldPositions = new Float32Array(count * 3);    // CPU-tracked spawn positions
+            const lastLifecycles = new Float32Array(count);             // Track lifecycle for respawn detection
             
             // Compute actual Z bounds from particles
             particleBounds = { minZ: Infinity, maxZ: -Infinity };
@@ -1708,6 +1710,20 @@
             geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
             geometry.setAttribute('seeds', new THREE.BufferAttribute(seeds, 4));
             geometry.setAttribute('drift', new THREE.BufferAttribute(drifts, 3));
+            
+            // CPU-tracked spawn world positions (updated when particles respawn)
+            const spawnAttr = new THREE.BufferAttribute(spawnWorldPositions, 3);
+            spawnAttr.setUsage(THREE.DynamicDrawUsage); // Will be updated frequently
+            geometry.setAttribute('spawnWorldPosition', spawnAttr);
+            
+            // Store references for CPU update
+            window._emissionState = {
+                spawnWorldPositions,
+                lastLifecycles,
+                spawnAttr,
+                seeds: seeds,
+                count: count
+            };
             
             const shapeVal = settings.shape === 'circle' ? 0 : (settings.shape === 'square' ? 1 : 2);
             
@@ -1770,6 +1786,7 @@
                     attribute vec3 scatteredPosition;
                     attribute vec4 seeds;
                     attribute vec3 drift;
+                    attribute vec3 spawnWorldPosition; // CPU-tracked spawn position in world space
                     
                     // GPU Skinning attributes
                     attribute vec4 skinIndex;
@@ -2236,8 +2253,9 @@
                                 // Matches the Effect Start plane reference frame
                                 // Particles drift AWAY from camera (same direction as dissipation)
                                 
-                                // Use ANIMATED position (basePosition includes GPU skinning)
-                                vec3 animatedWorldPos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
+                                // Use CPU-tracked spawn position (frozen at respawn time)
+                                // This is set by CPU when particle lifecycle resets
+                                vec3 frozenSpawnPos = spawnWorldPosition;
                                 
                                 // Drift direction = away from camera (matches Effect Start reference)
                                 // cameraDir points where camera looks, so particles drift along +cameraDir (away)
@@ -2266,8 +2284,9 @@
                                 float driftProgress = 1.0 - pow(1.0 - lifecycle, 2.0);
                                 float driftDist = driftProgress * emissionDrift * 0.5;
                                 
-                                // Final position = animated spawn point + camera-relative drift
-                                emissionWorldPos = animatedWorldPos + worldDriftDir * driftDist;
+                                // Final position = FROZEN spawn point + camera-relative drift
+                                // frozenSpawnPos is set by CPU and doesn't change with animation
+                                emissionWorldPos = frozenSpawnPos + worldDriftDir * driftDist;
                                 
                                 // Alpha fade based on lifecycle
                                 float fadeProgress = max(0.0, (lifecycle - emissionFadeStart) / (1.0 - emissionFadeStart + 0.001));
@@ -2661,18 +2680,64 @@
                 if (skinnedMesh && skinnedMesh.skeleton) {
                     skinnedMesh.skeleton.update();
                     
-                    // Periodically freeze bone texture for emission detachment
-                    if (gpuSkinningEnabled && settings.emissionEnabled) {
-                        if (time - lastBoneFreezeTime > BONE_FREEZE_INTERVAL) {
-                            freezeBoneTexture();
-                            lastBoneFreezeTime = time;
-                        }
-                    }
-                    
                     // CPU fallback only if GPU skinning not enabled
                     if (!gpuSkinningEnabled && pointsMesh && particleBaseData.length > 0) {
                         updateParticlesFromSkeleton();
                     }
+                }
+            }
+            
+            // === CPU-SIDE SPAWN POSITION TRACKING ===
+            // Update spawn world positions when particles respawn
+            if (settings.emissionEnabled && window._emissionState && pointsMesh && skinnedMesh) {
+                const state = window._emissionState;
+                const cycleSpeed = settings.emissionSpeed / 100 * 0.5;
+                const geom = pointsMesh.geometry;
+                const constellationAttr = geom.attributes.constellationPosition;
+                let needsUpdate = false;
+                
+                for (let i = 0; i < state.count; i++) {
+                    // Replicate shader lifecycle calculation
+                    const seed1 = state.seeds[i * 4];
+                    const seed2 = state.seeds[i * 4 + 1];
+                    const speed = state.seeds[i * 4 + 2];
+                    const phaseOffset = seed1 * 6.28318 + seed2 * 3.14159;
+                    const speedVariation = 0.7 + speed * 0.6;
+                    const lifecycle = (time * cycleSpeed * speedVariation + phaseOffset / 6.28318) % 1.0;
+                    
+                    // Detect respawn (lifecycle wrapped around)
+                    if (lifecycle < state.lastLifecycles[i] || state.lastLifecycles[i] === 0) {
+                        // Particle respawned - capture current animated world position
+                        // Get animated position via applyBoneTransform
+                        const p = particleBaseData[i];
+                        if (p && p.vertexIndex >= 0) {
+                            const meshPos = skinnedMesh.geometry.attributes.position;
+                            const vi = p.vertexIndex;
+                            _tempVec.fromBufferAttribute(meshPos, vi);
+                            skinnedMesh.applyBoneTransform(vi, _tempVec);
+                            
+                            // Apply normalization
+                            const { cx, cy, cz, scale } = skeletonNormParams;
+                            let px = (_tempVec.x - cx) * scale;
+                            let py = (_tempVec.y - cy) * scale;
+                            let pz = (_tempVec.z - cz) * scale;
+                            
+                            // Transform to world space
+                            _tempVec.set(px, py, pz);
+                            _tempVec.applyMatrix4(modelGroup.matrixWorld);
+                            
+                            // Store spawn world position
+                            state.spawnWorldPositions[i * 3] = _tempVec.x;
+                            state.spawnWorldPositions[i * 3 + 1] = _tempVec.y;
+                            state.spawnWorldPositions[i * 3 + 2] = _tempVec.z;
+                            needsUpdate = true;
+                        }
+                    }
+                    state.lastLifecycles[i] = lifecycle;
+                }
+                
+                if (needsUpdate) {
+                    state.spawnAttr.needsUpdate = true;
                 }
             }
             

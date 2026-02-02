@@ -436,6 +436,7 @@
             <label>Density Falloff (fewer particles into distance)</label>
             <input type="range" id="emissionDensityFalloff" min="0" max="100" value="50">
             <span id="emissionDensityFalloffValue">50</span>
+            <input type="number" id="emissionDensityFalloffMax" value="100" style="width:50px;margin-left:5px;">
         </div>
         
         <div class="slider-row">
@@ -708,6 +709,7 @@
             emissionBoundaryFalloffMax: 200, // Max slider value
             emissionFalloffCurve: 'quadratic', // linear, quadratic, cubic, exponential
             emissionDensityFalloff: 50, // Particle density falloff from boundary
+            emissionDensityFalloffMax: 100, // Max slider value
             emissionDensityFalloffCurve: 'quadratic', // linear, quadratic, cubic, exponential
             // Legacy surface animation
             surfaceFloat: 3,
@@ -830,6 +832,8 @@
             document.getElementById('emissionBoundaryFalloffMax').value = settings.emissionBoundaryFalloffMax || 200;
             document.getElementById('emissionFalloffCurve').value = settings.emissionFalloffCurve || 'quadratic';
             document.getElementById('emissionDensityFalloff').value = settings.emissionDensityFalloff || 50;
+            document.getElementById('emissionDensityFalloff').max = settings.emissionDensityFalloffMax || 100;
+            document.getElementById('emissionDensityFalloffMax').value = settings.emissionDensityFalloffMax || 100;
             document.getElementById('emissionDensityFalloffCurve').value = settings.emissionDensityFalloffCurve || 'quadratic';
             
             // Legacy surface animation
@@ -3248,6 +3252,7 @@
             settings.emissionBoundaryFalloffMax = parseFloat(document.getElementById('emissionBoundaryFalloffMax').value);
             settings.emissionFalloffCurve = document.getElementById('emissionFalloffCurve').value;
             settings.emissionDensityFalloff = parseFloat(document.getElementById('emissionDensityFalloff').value);
+            settings.emissionDensityFalloffMax = parseFloat(document.getElementById('emissionDensityFalloffMax').value);
             settings.emissionDensityFalloffCurve = document.getElementById('emissionDensityFalloffCurve').value;
             // Legacy surface animation
             settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
@@ -3406,6 +3411,13 @@
             if (pointsMesh) {
                 pointsMesh.material.uniforms.emissionDensityFalloff.value = settings.emissionDensityFalloff / 100;
             }
+        });
+        
+        // Density falloff max input
+        document.getElementById('emissionDensityFalloffMax').addEventListener('change', (e) => {
+            const max = parseFloat(e.target.value);
+            settings.emissionDensityFalloffMax = max;
+            document.getElementById('emissionDensityFalloff').max = max;
         });
         
         // Density falloff curve dropdown

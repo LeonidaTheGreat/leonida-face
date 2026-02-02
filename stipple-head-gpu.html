@@ -2359,7 +2359,9 @@
                                 // Radial and Camera drift fade out over their duration
                                 // Upward drift is constant, creating "evaporate up" effect
                                 
-                                vec3 radialDir = normalize(frozenSpawnPos); // Away from model center
+                                // Radial direction from MODEL center (not world origin)
+                                // Subtract modelOffset to get position relative to model center
+                                vec3 radialDir = normalize(frozenSpawnPos - modelOffset); // Away from model center
                                 vec3 screenUp = cameraUp; // Camera's up direction (screen-up)
                                 vec3 awayFromCamera = cameraDir;
                                 

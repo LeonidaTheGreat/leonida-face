@@ -338,6 +338,11 @@
         </div>
         
         <div class="slider-row">
+            <label>Camera Drift (0=none, 100=away from camera)</label>
+            <input type="range" id="emissionCameraDrift" min="0" max="100" value="50">
+        </div>
+        
+        <div class="slider-row">
             <label>Turbulence (curl noise)</label>
             <input type="range" id="emissionTurbulence" min="0" max="100" value="20">
         </div>
@@ -609,6 +614,7 @@
             emissionDriftMin: 0,
             emissionDriftMax: 200,
             emissionDirection: 30,
+            emissionCameraDrift: 50,
             emissionTurbulence: 20,
             emissionIntensity: 200,
             emissionFadeStart: 40,
@@ -717,6 +723,7 @@
             document.getElementById('emissionDriftMax').value = settings.emissionDriftMax;
             
             document.getElementById('emissionDirection').value = settings.emissionDirection;
+            document.getElementById('emissionCameraDrift').value = settings.emissionCameraDrift;
             document.getElementById('emissionTurbulence').value = settings.emissionTurbulence;
             document.getElementById('emissionIntensity').value = settings.emissionIntensity;
             document.getElementById('emissionFadeStart').value = settings.emissionFadeStart;
@@ -1780,6 +1787,7 @@
                     emissionSpeed: { value: settings.emissionSpeed / 100 },
                     emissionDrift: { value: settings.emissionDrift / 100 },
                     emissionDirection: { value: settings.emissionDirection / 100 },
+                    emissionCameraDrift: { value: settings.emissionCameraDrift / 100 },
                     emissionTurbulence: { value: settings.emissionTurbulence / 100 },
                     emissionIntensity: { value: settings.emissionIntensity / 100 },
                     emissionFadeStart: { value: settings.emissionFadeStart / 100 },
@@ -1860,6 +1868,7 @@
                     uniform float emissionSpeed;
                     uniform float emissionDrift;
                     uniform float emissionDirection;
+                    uniform float emissionCameraDrift;
                     uniform float emissionTurbulence;
                     uniform float emissionIntensity;
                     uniform float emissionFadeStart;
@@ -2288,10 +2297,16 @@
                                 // Use CPU-tracked spawn position (frozen at respawn time)
                                 vec3 frozenSpawnPos = spawnWorldPosition;
                                 
-                                // Drift direction = away from camera
-                                vec3 awayFromCamera = cameraDir;
+                                // Drift direction: blend between radial, upward, and camera-away
+                                vec3 radialDir = normalize(frozenSpawnPos); // Away from model center
                                 vec3 worldUp = vec3(0.0, 1.0, 0.0);
-                                vec3 cameraDriftDir = normalize(mix(awayFromCamera, worldUp, emissionDirection * 0.5));
+                                vec3 awayFromCamera = cameraDir;
+                                
+                                // First blend radial vs upward based on emissionDirection
+                                vec3 baseDir = normalize(mix(radialDir, worldUp, emissionDirection));
+                                
+                                // Then blend with camera-away based on emissionCameraDrift
+                                vec3 cameraDriftDir = normalize(mix(baseDir, awayFromCamera, emissionCameraDrift));
                                 
                                 // Per-particle direction variation
                                 vec3 particleVariation = normalize(drift);
@@ -3054,7 +3069,7 @@
         setupEmissionSlider('emissionDrift', 'emissionDrift');
         
         // Emission sliders without min/max
-        ['emissionDirection', 'emissionTurbulence', 'emissionIntensity', 'emissionFadeStart', 'emissionSizeDecay'].forEach(id => {
+        ['emissionDirection', 'emissionCameraDrift', 'emissionTurbulence', 'emissionIntensity', 'emissionFadeStart', 'emissionSizeDecay'].forEach(id => {
             document.getElementById(id).addEventListener('input', (e) => {
                 settings[id] = parseFloat(e.target.value);
                 if (pointsMesh) {

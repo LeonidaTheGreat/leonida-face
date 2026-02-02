@@ -1855,7 +1855,8 @@
                     normCenter: { value: new THREE.Vector3() },
                     normScale: { value: 1.0 },
                     useGPUSkinning: { value: false },
-                    frozenModelMatrix: { value: new THREE.Matrix4() }
+                    frozenModelMatrix: { value: new THREE.Matrix4() },
+                    modelOffset: { value: new THREE.Vector3(0, 0, 0) }
                 },
                 vertexShader: `
                     attribute float size;
@@ -1885,6 +1886,7 @@
                     uniform float normScale;
                     uniform bool useGPUSkinning;
                     uniform mat4 frozenModelMatrix;
+                    uniform vec3 modelOffset;
                     
                     uniform float time;
                     uniform float scatter;
@@ -2335,7 +2337,8 @@
                                 
                                 // === CAMERA-RELATIVE EMISSION ===
                                 // Use CPU-tracked spawn position (frozen at respawn time)
-                                vec3 frozenSpawnPos = spawnWorldPosition;
+                                // Apply model offset so particles move with model
+                                vec3 frozenSpawnPos = spawnWorldPosition + modelOffset;
                                 
                                 // === PHASED DRIFT DIRECTION ===
                                 // Radial and Camera drift fade out over their duration
@@ -2962,8 +2965,12 @@
             const val = parseFloat(e.target.value);
             settings.modelZOffset = val;
             document.getElementById('modelZOffsetValue').textContent = val;
+            const zOffset = val / 100; // Scale down for reasonable range
             if (modelGroup) {
-                modelGroup.position.z = val / 100; // Scale down for reasonable range
+                modelGroup.position.z = zOffset;
+            }
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.modelOffset.value.set(0, 0, zOffset);
             }
         });
         

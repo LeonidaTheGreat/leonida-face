@@ -2222,23 +2222,18 @@
                             // Lifecycle phase: 0 = just spawned, 1 = about to respawn
                             float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
                             
-                            // === WORLD SPACE EMISSION with FROZEN BONES ===
-                            // Use frozen bone matrices to get position at "freeze time"
-                            // This decouples emitted particles from current animation
-                            vec3 frozenSkinnedPos;
-                            if (useGPUSkinning && hasFrozenBones) {
-                                // Apply frozen bone transforms to get stable animated position
-                                vec3 pos1 = applyFrozenGPUSkinning(restPosition, skinIndex, skinWeight);
-                                vec3 pos2 = applyFrozenGPUSkinning(neighborRestPosition, neighborSkinIndex, neighborSkinWeight);
-                                vec3 skinnedPos = mix(pos1, pos2, edgeFactor);
-                                frozenSkinnedPos = (skinnedPos - normCenter) * normScale;
-                            } else {
-                                // Fallback to constellation position
-                                frozenSkinnedPos = constellationPosition;
-                            }
+                            // === WORLD SPACE EMISSION ===
+                            // Convert local animated position to world space
+                            vec3 animatedWorldPos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
                             
-                            // Transform frozen skinned position to world space
-                            vec3 currentWorldBase = (frozenModelMatrix * vec4(frozenSkinnedPos, 1.0)).xyz;
+                            // Rest pose world position (stable reference point)
+                            vec3 restWorldPos = (modelMatrix * vec4(constellationPosition, 1.0)).xyz;
+                            
+                            // Detachment: at lifecycle=0 particle is at animated pos
+                            // As lifecycle increases, it detaches to rest reference
+                            // This is instant (first 10% of lifecycle) so spawn pos matches animation
+                            float detachFactor = min(lifecycle * 10.0, 1.0);
+                            vec3 currentWorldBase = mix(animatedWorldPos, restWorldPos, detachFactor);
                             
                             // 4. Compute drift direction in WORLD SPACE
                             vec3 worldRadial = normalize(currentWorldBase);

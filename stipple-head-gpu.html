@@ -859,23 +859,24 @@
         const HEAD_TOP_PERCENT = 0.15; // Top 15% of model height = head region
         
         // Model settings: headOnly=true means the model IS just a head
+        // zOffset: model-specific Z position adjustment
         const modelSettings = {
-            walt: { headOnly: true },
-            female: { headOnly: false },
-            male: { headOnly: false },
-            leonida: { headOnly: false },
-            leonida_simple: { headOnly: false },
-            wanderer: { headOnly: false },
-            gothic: { headOnly: false },
-            explorer: { headOnly: false },
-            survivor: { headOnly: false },
-            biped1: { headOnly: false },
-            biped2_run: { headOnly: false },
-            biped2_walk: { headOnly: false },
-            biped3: { headOnly: false },
-            biped4: { headOnly: false },
-            biped5: { headOnly: false },
-            biped6: { headOnly: false }
+            walt: { headOnly: true, zOffset: 0 },
+            female: { headOnly: false, zOffset: 0 },
+            male: { headOnly: false, zOffset: 0 },
+            leonida: { headOnly: false, zOffset: -43 },
+            leonida_simple: { headOnly: false, zOffset: -43 },
+            wanderer: { headOnly: false, zOffset: 0 },
+            gothic: { headOnly: false, zOffset: 0 },
+            explorer: { headOnly: false, zOffset: 0 },
+            survivor: { headOnly: false, zOffset: 0 },
+            biped1: { headOnly: false, zOffset: 0 },
+            biped2_run: { headOnly: false, zOffset: 0 },
+            biped2_walk: { headOnly: false, zOffset: 0 },
+            biped3: { headOnly: false, zOffset: 0 },
+            biped4: { headOnly: false, zOffset: 0 },
+            biped5: { headOnly: false, zOffset: 0 },
+            biped6: { headOnly: false, zOffset: 0 }
         };
         
         // Animation state
@@ -1339,6 +1340,19 @@
             applySettingsToUI();
             initParticles();
             
+            // Apply model-specific Z offset
+            const modelOpts = modelSettings[modelName] || { zOffset: 0 };
+            const zOffset = modelOpts.zOffset || 0;
+            settings.modelZOffset = zOffset;
+            document.getElementById('modelZOffset').value = zOffset;
+            document.getElementById('modelZOffsetValue').textContent = zOffset;
+            if (modelGroup) {
+                modelGroup.position.z = zOffset / 100;
+            }
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.modelOffset.value.set(0, 0, zOffset / 100);
+            }
+            
             document.getElementById('status').textContent = `Loaded: ${vertices.length} vertices`;
             
             // Auto-play handled in GLTF loader
@@ -1792,7 +1806,8 @@
                 lastLifecycles,
                 spawnAttr,
                 seeds: seeds,
-                count: count
+                count: count,
+                forceUpdateFrames: 60 // Force update all spawn positions for first 60 frames
             };
             
             const shapeVal = settings.shape === 'circle' ? 0 : (settings.shape === 'square' ? 1 : 2);
@@ -2825,6 +2840,12 @@
                 const constellationAttr = geom.attributes.constellationPosition;
                 let needsUpdate = false;
                 
+                // Force update all particles for first N frames after load
+                const forceUpdate = state.forceUpdateFrames > 0;
+                if (forceUpdate) {
+                    state.forceUpdateFrames--;
+                }
+                
                 for (let i = 0; i < state.count; i++) {
                     // Replicate shader lifecycle calculation
                     const seed1 = state.seeds[i * 4];
@@ -2834,8 +2855,8 @@
                     const speedVariation = 0.7 + speed * 0.6;
                     const lifecycle = (time * cycleSpeed * speedVariation + phaseOffset / 6.28318) % 1.0;
                     
-                    // Detect respawn (lifecycle wrapped around)
-                    if (lifecycle < state.lastLifecycles[i] || state.lastLifecycles[i] === 0) {
+                    // Detect respawn (lifecycle wrapped around) OR force update on load
+                    if (forceUpdate || lifecycle < state.lastLifecycles[i] || state.lastLifecycles[i] === 0) {
                         // Particle respawned - capture current animated world position
                         // Get animated position via applyBoneTransform WITH edge interpolation
                         const p = particleBaseData[i];

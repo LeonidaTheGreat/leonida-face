@@ -2369,19 +2369,22 @@
                         float emissionActive = 0.0;
                         vec3 emissionWorldPos = vec3(0.0);
                         
-                        if (emissionEnabled > 0.5 && falloff > 0.01) {
-                            // Only emit particles AT the Effect Start boundary plane
-                            float boundaryThickness = 0.15;
+                        if (emissionEnabled > 0.5 && falloff > 0.001) {
+                            // Emit particles in a zone starting at the Effect Start boundary
+                            // Thinner zone = sharper boundary definition
+                            float boundaryThickness = 0.08; // Reduced from 0.15 for sharper edge
                             
                             if (falloff > boundaryThickness) {
                                 // Too far past boundary - hide this particle
                                 emissionAlphaEffect = 0.0;
                                 vEmissionSizeMult = 0.0;
                             } else {
-                                // Boundary falloff: effect is strongest at boundary, fades into distance
-                                // falloff goes from ~0.01 (at boundary) to boundaryThickness (deep in zone)
-                                float distFromBoundary = (falloff - 0.01) / (boundaryThickness - 0.01);
-                                float boundaryFactor = 1.0 - distFromBoundary * emissionBoundaryFalloff;
+                                // Boundary falloff: effect is strongest RIGHT AT boundary, fades sharply
+                                // falloff goes from ~0 (at boundary) to boundaryThickness (deep in zone)
+                                float distFromBoundary = falloff / boundaryThickness;
+                                // Use power curve for sharper falloff (higher power = sharper)
+                                float falloffPower = 1.0 + emissionBoundaryFalloff * 3.0; // 1-4 power range
+                                float boundaryFactor = pow(1.0 - distFromBoundary, falloffPower);
                                 boundaryFactor = clamp(boundaryFactor, 0.0, 1.0);
                                 
                                 // Per-particle lifecycle timing
@@ -2413,11 +2416,12 @@
                                     float heatProgress = lifecycle / max(emissionHeatDuration, 0.01);
                                     
                                     // Glow intensifies as we approach pop, scaled by boundary falloff
-                                    float heatGlow = 1.0 + heatProgress * heatProgress * emissionIntensity * 2.0 * boundaryFactor;
-                                    emissionAlphaEffect = mix(1.0, heatGlow, boundaryFactor);
+                                    // Stronger glow effect (3x multiplier) for visible heat-up
+                                    float heatGlow = 1.0 + heatProgress * heatProgress * emissionIntensity * 3.0 * boundaryFactor;
+                                    emissionAlphaEffect = mix(0.5, heatGlow, boundaryFactor); // Dim non-boundary particles
                                     
-                                    // Slight size increase during heat-up, scaled by boundary falloff
-                                    vEmissionSizeMult = 1.0 + heatProgress * 0.3 * boundaryFactor;
+                                    // Size increase during heat-up, scaled by boundary falloff
+                                    vEmissionSizeMult = 1.0 + heatProgress * 0.5 * boundaryFactor;
                                     
                                 } else {
                                     // === POP & FLOAT PHASES ===

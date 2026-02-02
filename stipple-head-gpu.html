@@ -2650,7 +2650,9 @@
                                     float totalDist = popDist + floatDist;
                                     
                                     // Final position: world position + drift
-                                    emissionWorldPos = worldBasePos + worldDriftDir * totalDist;
+                                    // Use FROZEN spawn position (captured by CPU at spawn time)
+                                    // NOT worldBasePos which follows animation
+                                    emissionWorldPos = spawnWorldPosition + worldDriftDir * totalDist;
                                     
                                     // === FLOAT PHASE: Evaporation effect ===
                                     // Intensity boost at pop, fading over float, scaled by boundary distance
@@ -3073,9 +3075,8 @@
             }
             
             // === CPU-SIDE SPAWN POSITION TRACKING ===
-            // DISABLED: No longer needed - shader now uses worldBasePos directly for emission
-            // This was causing major lag at load due to applyBoneTransform calls
-            if (false && settings.emissionEnabled && window._emissionState && pointsMesh && skinnedMesh) {
+            // Captures world position when particles spawn so they detach properly
+            if (settings.emissionEnabled && window._emissionState && pointsMesh && skinnedMesh) {
                 const state = window._emissionState;
                 const cycleSpeed = settings.emissionSpeed / 100 * 0.5;
                 const geom = pointsMesh.geometry;

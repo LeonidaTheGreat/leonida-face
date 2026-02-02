@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Leonida - Avatar Hub</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    * { box-sizing: border-box; }
+    body, html { 
+      width: 100%; 
+      height: 100%; 
+      margin: 0; 
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #0f0f1a 100%);
+      color: #e8e8f0;
+    }
+    
+    .container {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      height: 100vh;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      gap: 20px;
+    }
+    
+    #avatar {
+      min-height: 400px;
+      background: radial-gradient(ellipse at center bottom, #1a1a2e 0%, #0a0a12 70%);
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .controls-panel {
+      background: rgba(18, 18, 30, 0.95);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid rgba(255, 215, 0, 0.15);
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 12px;
+    }
+    
+    .tab {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .tab:hover { background: rgba(255,255,255,0.05); color: #ccc; }
+    .tab.active { background: rgba(255,215,0,0.15); color: #ffd700; }
+    
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    /* Connection Tab */
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    
+    .config-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .config-group label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .config-group input {
+      padding: 10px 14px;
+      font-size: 14px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .config-group input:focus {
+      border-color: rgba(255, 215, 0, 0.5);
+    }
+    
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #666;
+    }
+    .status-dot.connected { background: #4ade80; animation: pulse 2s infinite; }
+    .status-dot.connecting { background: #fbbf24; animation: pulse 1s infinite; }
+    .status-dot.error { background: #f87171; }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .status-text {
+      flex: 1;
+      font-size: 14px;
+    }
+    
+    .btn {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #ffd700 0%, #b8860b 100%);
+      color: #0a0a12;
+    }
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(255, 215, 0, 0.3);
+    }
+    
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #e0e0e0;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    /* Chat Tab */
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .messages {
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 12px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+    }
+    
+    .message {
+      margin: 8px 0;
+      padding: 10px 14px;
+      border-radius: 12px;
+      max-width: 85%;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .message.user {
+      background: linear-gradient(135deg, #6c63ff 0%, #5a52d5 100%);
+      margin-left: auto;
+      border-bottom-right-radius: 4px;
+    }
+    
+    .message.assistant {
+      background: rgba(255,215,0,0.1);
+      border: 1px solid rgba(255,215,0,0.2);
+      border-bottom-left-radius: 4px;
+    }
+    
+    .message.system {
+      background: rgba(255,255,255,0.05);
+      color: #888;
+      text-align: center;
+      max-width: 100%;
+      font-size: 12px;
+    }
+    
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+    
+    #chat-input {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 14px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      outline: none;
+    }
+    #chat-input:focus {
+      border-color: rgba(255, 215, 0, 0.5);
+    }
+    
+    /* Settings Tab */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    
+    select {
+      padding: 10px 14px;
+      font-size: 14px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      color: #fff;
+      outline: none;
+      cursor: pointer;
+    }
+    select:focus {
+      border-color: rgba(255, 215, 0, 0.5);
+    }
+    
+    /* Overlay Status */
+    .overlay-status {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 18, 30, 0.9);
+      padding: 10px 24px;
+      border-radius: 50px;
+      font-size: 14px;
+      color: #888;
+      border: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 10;
+    }
+    
+    .overlay-status .speaking-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ffd700;
+    }
+    .overlay-status.speaking .speaking-indicator {
+      animation: speakPulse 0.3s ease-in-out infinite alternate;
+    }
+    
+    @keyframes speakPulse {
+      from { transform: scale(1); opacity: 0.7; }
+      to { transform: scale(1.3); opacity: 1; }
+    }
+  </style>
+
+  <script type="importmap">
+  { "imports":
+    {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.7/modules/talkinghead.mjs"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import { TalkingHead } from "talkinghead";
+
+    // ============================================
+    // Configuration
+    // ============================================
+    const CONFIG = {
+      gateway: {
+        url: 'ws://127.0.0.1:18789',
+        token: ''
+      },
+      elevenlabs: {
+        apiKey: '',
+        voiceId: 'TxGEqnHWrfWFTfGW9XjX', // Josh
+        model: 'eleven_multilingual_v2'
+      },
+      avatar: {
+        url: 'https://models.readyplayer.me/64bfa15f0e72c63d7c3934a6.glb?morphTargets=ARKit,Oculus+Visemes,mouthOpen,mouthSmile,eyesClosed,eyesLookUp,eyesLookDown&textureSizeLimit=1024&textureFormat=png',
+        mood: 'neutral'
+      }
+    };
+
+    // ============================================
+    // State
+    // ============================================
+    let head = null;
+    let gatewaySocket = null;
+    let elevenSocket = null;
+    let isSpeaking = false;
+    let messageQueue = [];
+    let requestId = 0;
+    let pendingRequests = new Map();
+
+    // ============================================
+    // DOM Elements
+    // ============================================
+    const elements = {
+      statusDot: null,
+      statusText: null,
+      overlayStatus: null,
+      messages: null,
+      chatInput: null,
+      sendBtn: null,
+      connectBtn: null,
+      gatewayUrl: null,
+      gatewayToken: null,
+      elevenLabsKey: null,
+      moodSelect: null
+    };
+
+    // ============================================
+    // Utilities
+    // ============================================
+    function generateId() {
+      return `req_${++requestId}_${Date.now()}`;
+    }
+
+    function updateStatus(status, text) {
+      if (elements.statusDot) {
+        elements.statusDot.className = 'status-dot ' + status;
+      }
+      if (elements.statusText) {
+        elements.statusText.textContent = text;
+      }
+    }
+
+    function updateOverlayStatus(text, speaking = false) {
+      if (elements.overlayStatus) {
+        elements.overlayStatus.querySelector('span').textContent = text;
+        elements.overlayStatus.className = 'overlay-status' + (speaking ? ' speaking' : '');
+      }
+    }
+
+    function addMessage(role, content) {
+      if (!elements.messages) return;
+      
+      const msg = document.createElement('div');
+      msg.className = 'message ' + role;
+      msg.textContent = content;
+      elements.messages.appendChild(msg);
+      elements.messages.scrollTop = elements.messages.scrollHeight;
+    }
+
+    function saveConfig() {
+      const saved = {
+        gatewayUrl: elements.gatewayUrl?.value,
+        gatewayToken: elements.gatewayToken?.value,
+        elevenLabsKey: elements.elevenLabsKey?.value,
+        mood: elements.moodSelect?.value
+      };
+      localStorage.setItem('leonida-avatar-config', JSON.stringify(saved));
+    }
+
+    function loadConfig() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('leonida-avatar-config') || '{}');
+        if (saved.gatewayUrl && elements.gatewayUrl) elements.gatewayUrl.value = saved.gatewayUrl;
+        if (saved.gatewayToken && elements.gatewayToken) elements.gatewayToken.value = saved.gatewayToken;
+        if (saved.elevenLabsKey && elements.elevenLabsKey) elements.elevenLabsKey.value = saved.elevenLabsKey;
+        if (saved.mood && elements.moodSelect) elements.moodSelect.value = saved.mood;
+      } catch (e) {}
+    }
+
+    // ============================================
+    // Gateway WebSocket
+    // ============================================
+    async function connectGateway() {
+      const url = elements.gatewayUrl?.value || CONFIG.gateway.url;
+      const token = elements.gatewayToken?.value || CONFIG.gateway.token;
+
+      if (gatewaySocket) {
+        gatewaySocket.close();
+      }
+
+      updateStatus('connecting', 'Connecting to Gateway...');
+      
+      try {
+        gatewaySocket = new WebSocket(url);
+
+        gatewaySocket.onopen = () => {
+          console.log('[Gateway] Connected, sending handshake...');
+          
+          // Send connect request
+          const connectReq = {
+            type: 'req',
+            id: generateId(),
+            method: 'connect',
+            params: {
+              minProtocol: 3,
+              maxProtocol: 3,
+              client: {
+                id: 'leonida-avatar',
+                version: '1.0.0',
+                platform: 'web',
+                mode: 'operator'
+              },
+              role: 'operator',
+              scopes: ['operator.read'],
+              caps: [],
+              commands: [],
+              permissions: {},
+              auth: token ? { token } : undefined,
+              locale: 'en-US',
+              userAgent: 'leonida-avatar/1.0.0'
+            }
+          };
+          
+          gatewaySocket.send(JSON.stringify(connectReq));
+        };
+
+        gatewaySocket.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            handleGatewayMessage(msg);
+          } catch (e) {
+            console.error('[Gateway] Parse error:', e);
+          }
+        };
+
+        gatewaySocket.onerror = (error) => {
+          console.error('[Gateway] Error:', error);
+          updateStatus('error', 'Connection error');
+        };
+
+        gatewaySocket.onclose = (event) => {
+          console.log('[Gateway] Closed:', event.code, event.reason);
+          updateStatus('', 'Disconnected');
+          gatewaySocket = null;
+        };
+
+      } catch (error) {
+        console.error('[Gateway] Connect failed:', error);
+        updateStatus('error', 'Failed to connect');
+      }
+    }
+
+    function handleGatewayMessage(msg) {
+      console.log('[Gateway] Message:', msg);
+
+      if (msg.type === 'event') {
+        handleGatewayEvent(msg);
+      } else if (msg.type === 'res') {
+        // Handle response
+        if (msg.ok && msg.payload?.type === 'hello-ok') {
+          updateStatus('connected', 'Connected to Gateway');
+          addMessage('system', 'Connected to Clawdbot Gateway');
+        } else if (!msg.ok) {
+          console.error('[Gateway] Request failed:', msg.error);
+          addMessage('system', 'Error: ' + (msg.error?.message || 'Unknown error'));
+        }
+        
+        // Resolve pending request
+        const pending = pendingRequests.get(msg.id);
+        if (pending) {
+          pending.resolve(msg);
+          pendingRequests.delete(msg.id);
+        }
+      }
+    }
+
+    function handleGatewayEvent(msg) {
+      const { event, payload } = msg;
+      
+      switch (event) {
+        case 'connect.challenge':
+          // Challenge received, handshake in progress
+          console.log('[Gateway] Challenge received');
+          break;
+          
+        case 'agent.response':
+        case 'chat.message':
+          // Agent sent a response - speak it!
+          if (payload?.content || payload?.text) {
+            const text = payload.content || payload.text;
+            addMessage('assistant', text);
+            speakText(text);
+          }
+          break;
+          
+        case 'agent.typing':
+          updateOverlayStatus('Thinking...', false);
+          break;
+          
+        default:
+          console.log('[Gateway] Unhandled event:', event);
+      }
+    }
+
+    async function sendToGateway(method, params) {
+      if (!gatewaySocket || gatewaySocket.readyState !== WebSocket.OPEN) {
+        throw new Error('Not connected to Gateway');
+      }
+
+      const id = generateId();
+      const req = { type: 'req', id, method, params };
+      
+      return new Promise((resolve, reject) => {
+        pendingRequests.set(id, { resolve, reject });
+        gatewaySocket.send(JSON.stringify(req));
+        
+        // Timeout after 30s
+        setTimeout(() => {
+          if (pendingRequests.has(id)) {
+            pendingRequests.delete(id);
+            reject(new Error('Request timeout'));
+          }
+        }, 30000);
+      });
+    }
+
+    // ============================================
+    // ElevenLabs TTS
+    // ============================================
+    async function speakText(text) {
+      const apiKey = elements.elevenLabsKey?.value || CONFIG.elevenlabs.apiKey;
+      
+      if (!apiKey) {
+        console.warn('[TTS] No ElevenLabs API key');
+        // Fallback: just show the text, no speech
+        return;
+      }
+
+      if (!text.trim() || isSpeaking) {
+        messageQueue.push(text);
+        return;
+      }
+
+      isSpeaking = true;
+      updateOverlayStatus('Speaking...', true);
+
+      // Close existing socket
+      if (elevenSocket && elevenSocket.readyState === WebSocket.OPEN) {
+        elevenSocket.close();
+      }
+
+      const voiceId = CONFIG.elevenlabs.voiceId;
+      const model = CONFIG.elevenlabs.model;
+      const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=${model}&output_format=pcm_22050&auto_mode=true&apply_text_normalization=off`;
+
+      let outputMsg = null;
+
+      try {
+        elevenSocket = new WebSocket(wsUrl);
+
+        elevenSocket.onopen = () => {
+          // Send initial config
+          elevenSocket.send(JSON.stringify({
+            text: ' ',
+            voice_settings: { stability: 0.8, similarity_boost: true },
+            generation_config: { chunk_length_schedule: [500, 500, 500, 500] },
+            xi_api_key: apiKey
+          }));
+          
+          // Send the actual text
+          elevenSocket.send(JSON.stringify({
+            text: text,
+            try_trigger_generation: false,
+            flush: true
+          }));
+        };
+
+        elevenSocket.onmessage = (event) => {
+          const r = JSON.parse(event.data);
+
+          if ((r.isFinal || r.normalizedAlignment) && outputMsg) {
+            head.speakAudio(outputMsg, { lipsyncLang: 'en' });
+            outputMsg = null;
+          }
+
+          if (!r.isFinal) {
+            if (r.alignment) {
+              outputMsg = { audio: [], words: [], wtimes: [], wdurations: [] };
+
+              let word = '';
+              let time = 0;
+              let duration = 0;
+              for (let i = 0; i < r.alignment.chars.length; i++) {
+                if (word.length === 0) time = r.alignment.charStartTimesMs[i];
+                if (word.length && r.alignment.chars[i] === ' ') {
+                  outputMsg.words.push(word);
+                  outputMsg.wtimes.push(time);
+                  outputMsg.wdurations.push(duration);
+                  word = '';
+                  duration = 0;
+                } else {
+                  duration += r.alignment.charDurationsMs[i];
+                  word += r.alignment.chars[i];
+                }
+              }
+              if (word.length) {
+                outputMsg.words.push(word);
+                outputMsg.wtimes.push(time);
+                outputMsg.wdurations.push(duration);
+              }
+            }
+
+            if (r.audio && outputMsg) {
+              outputMsg.audio.push(head.b64ToArrayBuffer(r.audio));
+            }
+          }
+        };
+
+        elevenSocket.onerror = (error) => {
+          console.error('[TTS] WebSocket error:', error);
+          finishSpeaking();
+        };
+
+        elevenSocket.onclose = () => {
+          finishSpeaking();
+        };
+
+      } catch (error) {
+        console.error('[TTS] Failed:', error);
+        finishSpeaking();
+      }
+    }
+
+    function finishSpeaking() {
+      isSpeaking = false;
+      updateOverlayStatus('Ready', false);
+      
+      // Process queue
+      if (messageQueue.length > 0) {
+        speakText(messageQueue.shift());
+      }
+    }
+
+    // Listen for TalkingHead speech end
+    function setupSpeechEndListener() {
+      // TalkingHead fires 'speechend' event when done speaking
+      const avatarEl = document.getElementById('avatar');
+      if (avatarEl) {
+        avatarEl.addEventListener('speechend', finishSpeaking);
+      }
+    }
+
+    // ============================================
+    // Chat
+    // ============================================
+    async function sendChat() {
+      const input = elements.chatInput;
+      const text = input?.value?.trim();
+      
+      if (!text) return;
+      
+      input.value = '';
+      addMessage('user', text);
+      
+      // For now, just trigger speech directly (testing)
+      // In full integration, this would go through Gateway
+      if (!gatewaySocket || gatewaySocket.readyState !== WebSocket.OPEN) {
+        // Demo mode: echo back
+        setTimeout(() => {
+          const response = `You said: "${text}". I'm Leonida, your AI assistant!`;
+          addMessage('assistant', response);
+          speakText(response);
+        }, 500);
+      } else {
+        // Send to Gateway (implement based on your Gateway API)
+        try {
+          // This would be your Gateway's chat API
+          // await sendToGateway('chat.send', { message: text });
+          addMessage('system', 'Gateway chat not yet implemented');
+        } catch (error) {
+          addMessage('system', 'Error: ' + error.message);
+        }
+      }
+    }
+
+    // ============================================
+    // Tab Navigation
+    // ============================================
+    function initTabs() {
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          // Update active tab
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          
+          // Show corresponding content
+          const target = tab.dataset.tab;
+          document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.toggle('active', content.id === target);
+          });
+        });
+      });
+    }
+
+    // ============================================
+    // Initialize
+    // ============================================
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Cache DOM elements
+      elements.statusDot = document.querySelector('.status-dot');
+      elements.statusText = document.querySelector('.status-text');
+      elements.overlayStatus = document.querySelector('.overlay-status');
+      elements.messages = document.querySelector('.messages');
+      elements.chatInput = document.getElementById('chat-input');
+      elements.sendBtn = document.getElementById('send-btn');
+      elements.connectBtn = document.getElementById('connect-btn');
+      elements.gatewayUrl = document.getElementById('gateway-url');
+      elements.gatewayToken = document.getElementById('gateway-token');
+      elements.elevenLabsKey = document.getElementById('elevenlabs-key');
+      elements.moodSelect = document.getElementById('mood-select');
+
+      // Load saved config
+      loadConfig();
+
+      // Init tabs
+      initTabs();
+
+      // Initialize TalkingHead
+      updateOverlayStatus('Loading avatar...');
+      
+      const avatarContainer = document.getElementById('avatar');
+      head = new TalkingHead(avatarContainer, {
+        lipsyncModules: ['en'],
+        cameraView: 'upper',
+        cameraRotateEnable: true,
+        cameraPanEnable: false,
+        cameraZoomEnable: true
+      });
+
+      try {
+        await head.showAvatar({
+          url: CONFIG.avatar.url,
+          body: 'F',
+          avatarMood: 'neutral',
+          lipsyncLang: 'en'
+        }, (ev) => {
+          if (ev.lengthComputable) {
+            const pct = Math.round(ev.loaded / ev.total * 100);
+            updateOverlayStatus(`Loading avatar... ${pct}%`);
+          }
+        });
+
+        updateOverlayStatus('Ready');
+        setupSpeechEndListener();
+
+      } catch (error) {
+        console.error('Failed to load avatar:', error);
+        updateOverlayStatus('Failed to load avatar');
+      }
+
+      // Event listeners
+      elements.connectBtn?.addEventListener('click', () => {
+        saveConfig();
+        connectGateway();
+      });
+
+      elements.sendBtn?.addEventListener('click', sendChat);
+      
+      elements.chatInput?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendChat();
+      });
+
+      elements.moodSelect?.addEventListener('change', () => {
+        const mood = elements.moodSelect.value;
+        head?.setMood(mood);
+        saveConfig();
+      });
+
+      // Save config on input change
+      [elements.gatewayUrl, elements.gatewayToken, elements.elevenLabsKey].forEach(el => {
+        el?.addEventListener('change', saveConfig);
+      });
+
+      // Auto-connect if we have a saved token
+      const savedToken = elements.gatewayToken?.value;
+      if (savedToken) {
+        setTimeout(connectGateway, 1000);
+      }
+    });
+  </script>
+</head>
+
+<body>
+  <div class="container">
+    <div id="avatar">
+      <div class="overlay-status">
+        <div class="speaking-indicator"></div>
+        <span>Loading...</span>
+      </div>
+    </div>
+    
+    <div class="controls-panel">
+      <div class="tabs">
+        <button class="tab active" data-tab="chat-tab">💬 Chat</button>
+        <button class="tab" data-tab="connection-tab">🔌 Connection</button>
+        <button class="tab" data-tab="settings-tab">⚙️ Settings</button>
+      </div>
+      
+      <!-- Chat Tab -->
+      <div id="chat-tab" class="tab-content active">
+        <div class="chat-container">
+          <div class="messages">
+            <div class="message system">Welcome! Enter your ElevenLabs API key in Settings to enable voice.</div>
+          </div>
+          <div class="input-row">
+            <input type="text" id="chat-input" placeholder="Type a message...">
+            <button id="send-btn" class="btn btn-primary">Send</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Connection Tab -->
+      <div id="connection-tab" class="tab-content">
+        <div class="status-bar">
+          <div class="status-dot"></div>
+          <span class="status-text">Not connected</span>
+          <button id="connect-btn" class="btn btn-primary">Connect</button>
+        </div>
+        
+        <div class="config-grid">
+          <div class="config-group">
+            <label>Gateway URL</label>
+            <input type="text" id="gateway-url" value="ws://127.0.0.1:18789" placeholder="ws://127.0.0.1:18789">
+          </div>
+          <div class="config-group">
+            <label>Gateway Token (optional)</label>
+            <input type="password" id="gateway-token" placeholder="Enter token if required">
+          </div>
+        </div>
+      </div>
+      
+      <!-- Settings Tab -->
+      <div id="settings-tab" class="tab-content">
+        <div class="settings-grid">
+          <div class="config-group">
+            <label>ElevenLabs API Key</label>
+            <input type="password" id="elevenlabs-key" placeholder="Enter your API key">
+          </div>
+          <div class="config-group">
+            <label>Avatar Mood</label>
+            <select id="mood-select">
+              <option value="neutral">😐 Neutral</option>
+              <option value="happy">😊 Happy</option>
+              <option value="sad">😢 Sad</option>
+              <option value="angry">😠 Angry</option>
+              <option value="fear">😨 Fear</option>
+              <option value="disgust">🤢 Disgust</option>
+              <option value="love">😍 Love</option>
+              <option value="sleep">😴 Sleep</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

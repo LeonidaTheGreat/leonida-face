@@ -2072,10 +2072,13 @@
                         // Transform basePosition to world space for camera-relative calculations
                         vec3 worldBasePos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
                         
+                        // Model center in world space (for correct depth calculation with offset models)
+                        vec3 worldModelCenter = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+                        
                         float depth;
                         if (reference == 1) {
-                            // Camera reference - use world-space position
-                            vec3 toPoint = normalize(worldBasePos);
+                            // Camera reference - use direction from MODEL CENTER to particle
+                            vec3 toPoint = normalize(worldBasePos - worldModelCenter);
                             depth = -dot(toPoint, cameraDir);
                             depth = (depth + 1.0) / 2.0;
                         } else {

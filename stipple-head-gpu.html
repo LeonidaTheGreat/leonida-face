@@ -407,6 +407,12 @@
             <span id="emissionPopIntensityValue">50</span>
         </div>
         
+        <div class="slider-row">
+            <label>Falloff from Boundary (fade into distance)</label>
+            <input type="range" id="emissionBoundaryFalloff" min="0" max="100" value="50">
+            <span id="emissionBoundaryFalloffValue">50</span>
+        </div>
+        
         <h3>Legacy Surface Animation</h3>
         
         <div class="slider-row">
@@ -662,6 +668,7 @@
             // Heat-up and Pop phases
             emissionHeatDuration: 20, // % of lifecycle spent heating up (attached)
             emissionPopIntensity: 50, // Initial pop velocity when detaching
+            emissionBoundaryFalloff: 50, // How quickly effect fades away from boundary (0=no falloff, 100=sharp)
             // Legacy surface animation
             surfaceFloat: 3,
             surfaceFloatMin: 0,
@@ -776,6 +783,7 @@
             document.getElementById('emissionSizeDecay').value = settings.emissionSizeDecay;
             document.getElementById('emissionHeatDuration').value = settings.emissionHeatDuration;
             document.getElementById('emissionPopIntensity').value = settings.emissionPopIntensity;
+            document.getElementById('emissionBoundaryFalloff').value = settings.emissionBoundaryFalloff;
             
             // Legacy surface animation
             document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
@@ -1869,6 +1877,7 @@
                     emissionSizeDecay: { value: settings.emissionSizeDecay / 100 },
                     emissionHeatDuration: { value: settings.emissionHeatDuration / 100 },
                     emissionPopIntensity: { value: settings.emissionPopIntensity / 100 },
+                    emissionBoundaryFalloff: { value: settings.emissionBoundaryFalloff / 100 },
                     assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
                     assemblyDirection: { value: settings.assemblyDirection === 'above' ? 1 : settings.assemblyDirection === 'below' ? 2 : 0 },
                     assemblySpread: { value: settings.assemblySpread / 100 },
@@ -1958,6 +1967,7 @@
                     uniform float emissionSizeDecay;
                     uniform float emissionHeatDuration;
                     uniform float emissionPopIntensity;
+                    uniform float emissionBoundaryFalloff;
                     uniform float assemblyProgress;
                     uniform int assemblyDirection;
                     uniform float assemblySpread;
@@ -2368,6 +2378,12 @@
                                 emissionAlphaEffect = 0.0;
                                 vEmissionSizeMult = 0.0;
                             } else {
+                                // Boundary falloff: effect is strongest at boundary, fades into distance
+                                // falloff goes from ~0.01 (at boundary) to boundaryThickness (deep in zone)
+                                float distFromBoundary = (falloff - 0.01) / (boundaryThickness - 0.01);
+                                float boundaryFactor = 1.0 - distFromBoundary * emissionBoundaryFalloff;
+                                boundaryFactor = clamp(boundaryFactor, 0.0, 1.0);
+                                
                                 // Per-particle lifecycle timing
                                 float cycleSpeed = emissionSpeed * 0.5;
                                 float phaseOffset = seeds.x * 6.28318 + seeds.y * 3.14159;
@@ -2396,12 +2412,12 @@
                                     // Heat progress: 0 at start, 1 at pop moment
                                     float heatProgress = lifecycle / max(emissionHeatDuration, 0.01);
                                     
-                                    // Glow intensifies as we approach pop
-                                    float heatGlow = 1.0 + heatProgress * heatProgress * emissionIntensity * 2.0;
-                                    emissionAlphaEffect = heatGlow;
+                                    // Glow intensifies as we approach pop, scaled by boundary falloff
+                                    float heatGlow = 1.0 + heatProgress * heatProgress * emissionIntensity * 2.0 * boundaryFactor;
+                                    emissionAlphaEffect = mix(1.0, heatGlow, boundaryFactor);
                                     
-                                    // Slight size increase during heat-up
-                                    vEmissionSizeMult = 1.0 + heatProgress * 0.3;
+                                    // Slight size increase during heat-up, scaled by boundary falloff
+                                    vEmissionSizeMult = 1.0 + heatProgress * 0.3 * boundaryFactor;
                                     
                                 } else {
                                     // === POP & FLOAT PHASES ===
@@ -2465,8 +2481,8 @@
                                     emissionWorldPos = worldBasePos + worldDriftDir * totalDist;
                                     
                                     // === FLOAT PHASE: Evaporation effect ===
-                                    // Intensity boost at pop, fading over float
-                                    float intensityBoost = emissionIntensity * (1.0 - easedTime);
+                                    // Intensity boost at pop, fading over float, scaled by boundary distance
+                                    float intensityBoost = emissionIntensity * (1.0 - easedTime) * boundaryFactor;
                                     
                                     // Fade based on time since pop
                                     float adjustedFadeStart = max(0.0, (emissionFadeStart - emissionHeatDuration) / (1.0 - emissionHeatDuration));
@@ -3113,6 +3129,7 @@
             settings.emissionSizeDecay = parseFloat(document.getElementById('emissionSizeDecay').value);
             settings.emissionHeatDuration = parseFloat(document.getElementById('emissionHeatDuration').value);
             settings.emissionPopIntensity = parseFloat(document.getElementById('emissionPopIntensity').value);
+            settings.emissionBoundaryFalloff = parseFloat(document.getElementById('emissionBoundaryFalloff').value);
             // Legacy surface animation
             settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
             settings.surfaceFloatMin = parseFloat(document.getElementById('surfaceFloatMin').value);
@@ -3227,7 +3244,7 @@
         setupEmissionSlider('emissionDrift', 'emissionDrift');
         
         // Emission sliders without min/max
-        ['emissionRadialStrength', 'emissionRadialDuration', 'emissionCameraDrift', 'emissionCameraDuration', 'emissionUpwardStrength', 'emissionTurbulence', 'emissionIntensity', 'emissionFadeStart', 'emissionSizeDecay', 'emissionHeatDuration', 'emissionPopIntensity'].forEach(id => {
+        ['emissionRadialStrength', 'emissionRadialDuration', 'emissionCameraDrift', 'emissionCameraDuration', 'emissionUpwardStrength', 'emissionTurbulence', 'emissionIntensity', 'emissionFadeStart', 'emissionSizeDecay', 'emissionHeatDuration', 'emissionPopIntensity', 'emissionBoundaryFalloff'].forEach(id => {
             document.getElementById(id).addEventListener('input', (e) => {
                 settings[id] = parseFloat(e.target.value);
                 if (pointsMesh) {

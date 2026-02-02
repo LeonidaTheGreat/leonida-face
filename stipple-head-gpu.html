@@ -1683,6 +1683,18 @@
             const spawnWorldPositions = new Float32Array(count * 3);    // CPU-tracked spawn positions
             const lastLifecycles = new Float32Array(count);             // Track lifecycle for respawn detection
             
+            // Initialize spawn positions to constellation positions in world space
+            // (will be updated with animated positions when particles respawn)
+            for (let i = 0; i < count; i++) {
+                const p = particleBaseData[i];
+                // Use constellation position as initial spawn point
+                spawnWorldPositions[i * 3] = p.cx;
+                spawnWorldPositions[i * 3 + 1] = p.cy;
+                spawnWorldPositions[i * 3 + 2] = p.cz;
+                // Initialize lifecycle to 0 so first frame triggers update
+                lastLifecycles[i] = 0;
+            }
+            
             // Compute actual Z bounds from particles
             particleBounds = { minZ: Infinity, maxZ: -Infinity };
             for (let i = 0; i < count; i++) {
@@ -2753,19 +2765,32 @@
                     // Detect respawn (lifecycle wrapped around)
                     if (lifecycle < state.lastLifecycles[i] || state.lastLifecycles[i] === 0) {
                         // Particle respawned - capture current animated world position
-                        // Get animated position via applyBoneTransform
+                        // Get animated position via applyBoneTransform WITH edge interpolation
                         const p = particleBaseData[i];
                         if (p && p.vertexIndex >= 0) {
                             const meshPos = skinnedMesh.geometry.attributes.position;
+                            const { cx, cy, cz, scale } = skeletonNormParams;
+                            
+                            // Get primary vertex position
                             const vi = p.vertexIndex;
                             _tempVec.fromBufferAttribute(meshPos, vi);
                             skinnedMesh.applyBoneTransform(vi, _tempVec);
-                            
-                            // Apply normalization
-                            const { cx, cy, cz, scale } = skeletonNormParams;
                             let px = (_tempVec.x - cx) * scale;
                             let py = (_tempVec.y - cy) * scale;
                             let pz = (_tempVec.z - cz) * scale;
+                            
+                            // Interpolate with neighbor if edge particle
+                            if (p.neighborIndex >= 0 && p.edgeT > 0) {
+                                _tempVec2.fromBufferAttribute(meshPos, p.neighborIndex);
+                                skinnedMesh.applyBoneTransform(p.neighborIndex, _tempVec2);
+                                const nx = (_tempVec2.x - cx) * scale;
+                                const ny = (_tempVec2.y - cy) * scale;
+                                const nz = (_tempVec2.z - cz) * scale;
+                                
+                                px = px + (nx - px) * p.edgeT;
+                                py = py + (ny - py) * p.edgeT;
+                                pz = pz + (nz - pz) * p.edgeT;
+                            }
                             
                             // Transform to world space
                             _tempVec.set(px, py, pz);

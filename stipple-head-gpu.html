@@ -430,6 +430,24 @@
             </select>
         </div>
         
+        <h3>Density Falloff</h3>
+        
+        <div class="slider-row">
+            <label>Density Falloff (fewer particles into distance)</label>
+            <input type="range" id="emissionDensityFalloff" min="0" max="100" value="50">
+            <span id="emissionDensityFalloffValue">50</span>
+        </div>
+        
+        <div class="slider-row">
+            <label>Density Falloff Curve</label>
+            <select id="emissionDensityFalloffCurve">
+                <option value="linear">Linear</option>
+                <option value="quadratic" selected>Quadratic</option>
+                <option value="cubic">Cubic</option>
+                <option value="exponential">Exponential</option>
+            </select>
+        </div>
+        
         <h3>Legacy Surface Animation</h3>
         
         <div class="slider-row">
@@ -689,6 +707,8 @@
             emissionBoundaryFalloff: 50, // How quickly effect fades away from boundary
             emissionBoundaryFalloffMax: 200, // Max slider value
             emissionFalloffCurve: 'quadratic', // linear, quadratic, cubic, exponential
+            emissionDensityFalloff: 50, // Particle density falloff from boundary
+            emissionDensityFalloffCurve: 'quadratic', // linear, quadratic, cubic, exponential
             // Legacy surface animation
             surfaceFloat: 3,
             surfaceFloatMin: 0,
@@ -809,6 +829,8 @@
             document.getElementById('emissionBoundaryFalloff').max = settings.emissionBoundaryFalloffMax || 200;
             document.getElementById('emissionBoundaryFalloffMax').value = settings.emissionBoundaryFalloffMax || 200;
             document.getElementById('emissionFalloffCurve').value = settings.emissionFalloffCurve || 'quadratic';
+            document.getElementById('emissionDensityFalloff').value = settings.emissionDensityFalloff || 50;
+            document.getElementById('emissionDensityFalloffCurve').value = settings.emissionDensityFalloffCurve || 'quadratic';
             
             // Legacy surface animation
             document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
@@ -1905,6 +1927,8 @@
                     emissionPopIntensity: { value: settings.emissionPopIntensity / 100 },
                     emissionBoundaryFalloff: { value: settings.emissionBoundaryFalloff / 100 },
                     emissionFalloffCurve: { value: ['linear', 'quadratic', 'cubic', 'exponential'].indexOf(settings.emissionFalloffCurve) },
+                    emissionDensityFalloff: { value: settings.emissionDensityFalloff / 100 },
+                    emissionDensityFalloffCurve: { value: ['linear', 'quadratic', 'cubic', 'exponential'].indexOf(settings.emissionDensityFalloffCurve) },
                     assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
                     assemblyDirection: { value: settings.assemblyDirection === 'above' ? 1 : settings.assemblyDirection === 'below' ? 2 : 0 },
                     assemblySpread: { value: settings.assemblySpread / 100 },
@@ -1997,6 +2021,8 @@
                     uniform float emissionPopIntensity;
                     uniform float emissionBoundaryFalloff;
                     uniform int emissionFalloffCurve;
+                    uniform float emissionDensityFalloff;
+                    uniform int emissionDensityFalloffCurve;
                     uniform float assemblyProgress;
                     uniform int assemblyDirection;
                     uniform float assemblySpread;
@@ -2431,6 +2457,30 @@
                                 float boundaryFactor = 1.0 - rawFalloff * falloffStrength;
                                 boundaryFactor = clamp(boundaryFactor, 0.0, 1.0);
                                 
+                                // === DENSITY FALLOFF: Hide particles based on distance from boundary ===
+                                // Fewer particles as we get further from the boundary
+                                float densityRawFalloff;
+                                if (emissionDensityFalloffCurve == 0) {
+                                    densityRawFalloff = distFromBoundary;
+                                } else if (emissionDensityFalloffCurve == 1) {
+                                    densityRawFalloff = distFromBoundary * distFromBoundary;
+                                } else if (emissionDensityFalloffCurve == 2) {
+                                    densityRawFalloff = distFromBoundary * distFromBoundary * distFromBoundary;
+                                } else {
+                                    densityRawFalloff = 1.0 - exp(-distFromBoundary * 5.0);
+                                }
+                                
+                                // Use per-particle seed to randomly hide particles
+                                // Threshold increases with distance = fewer particles survive
+                                float densityThreshold = densityRawFalloff * emissionDensityFalloff;
+                                float particleRandom = fract(seeds.x * 12.9898 + seeds.y * 78.233);
+                                
+                                if (particleRandom < densityThreshold) {
+                                    // Hide this particle (density culled)
+                                    emissionAlphaEffect = 0.0;
+                                    vEmissionSizeMult = 0.0;
+                                } else {
+                                
                                 // Per-particle lifecycle timing
                                 float cycleSpeed = emissionSpeed * 0.5;
                                 float phaseOffset = seeds.x * 6.28318 + seeds.y * 3.14159;
@@ -2571,6 +2621,7 @@
                                     vEmissionSizeMult = (1.0 + intensityBoost * 0.3) * (1.0 - floatProgress * emissionSizeDecay);
                                     vEmissionSizeMult = max(vEmissionSizeMult, 0.1);
                                 }
+                                } // End density check
                             }
                         }
                         
@@ -3196,6 +3247,8 @@
             settings.emissionBoundaryFalloff = parseFloat(document.getElementById('emissionBoundaryFalloff').value);
             settings.emissionBoundaryFalloffMax = parseFloat(document.getElementById('emissionBoundaryFalloffMax').value);
             settings.emissionFalloffCurve = document.getElementById('emissionFalloffCurve').value;
+            settings.emissionDensityFalloff = parseFloat(document.getElementById('emissionDensityFalloff').value);
+            settings.emissionDensityFalloffCurve = document.getElementById('emissionDensityFalloffCurve').value;
             // Legacy surface animation
             settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
             settings.surfaceFloatMin = parseFloat(document.getElementById('surfaceFloatMin').value);
@@ -3343,6 +3396,24 @@
             if (pointsMesh) {
                 const curveMap = { 'linear': 0, 'quadratic': 1, 'cubic': 2, 'exponential': 3 };
                 pointsMesh.material.uniforms.emissionFalloffCurve.value = curveMap[settings.emissionFalloffCurve];
+            }
+        });
+        
+        // Density falloff slider
+        document.getElementById('emissionDensityFalloff').addEventListener('input', (e) => {
+            settings.emissionDensityFalloff = parseFloat(e.target.value);
+            document.getElementById('emissionDensityFalloffValue').textContent = settings.emissionDensityFalloff;
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.emissionDensityFalloff.value = settings.emissionDensityFalloff / 100;
+            }
+        });
+        
+        // Density falloff curve dropdown
+        document.getElementById('emissionDensityFalloffCurve').addEventListener('change', (e) => {
+            settings.emissionDensityFalloffCurve = e.target.value;
+            if (pointsMesh) {
+                const curveMap = { 'linear': 0, 'quadratic': 1, 'cubic': 2, 'exponential': 3 };
+                pointsMesh.material.uniforms.emissionDensityFalloffCurve.value = curveMap[settings.emissionDensityFalloffCurve];
             }
         });
         

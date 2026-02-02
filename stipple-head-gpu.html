@@ -1799,6 +1799,7 @@
                     falloffCurve: { value: getFalloffCurveIndex() },
                     reference: { value: settings.reference === 'camera' ? 1 : 0 },
                     cameraDir: { value: new THREE.Vector3(0, 0, -1) },
+                    cameraUp: { value: new THREE.Vector3(0, 1, 0) },
                     cameraPos: { value: new THREE.Vector3(0, 0, 3) },
                     modelBoundsZ: { value: new THREE.Vector2(particleBounds.minZ, particleBounds.maxZ) },
                     surfaceFloat: { value: settings.surfaceFloat / 100 },
@@ -1883,6 +1884,7 @@
                     uniform int falloffCurve;
                     uniform int reference;
                     uniform vec3 cameraDir;
+                    uniform vec3 cameraUp;
                     uniform vec3 cameraPos;
                     uniform vec2 modelBoundsZ;
                     uniform float surfaceFloat;
@@ -2329,7 +2331,7 @@
                                 // Upward drift is constant, creating "evaporate up" effect
                                 
                                 vec3 radialDir = normalize(frozenSpawnPos); // Away from model center
-                                vec3 worldUp = vec3(0.0, 1.0, 0.0);
+                                vec3 screenUp = cameraUp; // Camera's up direction (screen-up)
                                 vec3 awayFromCamera = cameraDir;
                                 
                                 // Calculate fade factors based on lifecycle vs duration
@@ -2345,7 +2347,7 @@
                                 // Combine all drift components
                                 vec3 totalDrift = radialDir * radialAmount + 
                                                   awayFromCamera * cameraAmount + 
-                                                  worldUp * upwardAmount;
+                                                  screenUp * upwardAmount;
                                 
                                 vec3 cameraDriftDir = length(totalDrift) > 0.001 ? normalize(totalDrift) : worldUp;
                                 
@@ -2874,6 +2876,7 @@
                 const dir = new THREE.Vector3();
                 camera.getWorldDirection(dir);
                 uniforms.cameraDir.value.copy(dir);
+                uniforms.cameraUp.value.copy(camera.up);
                 uniforms.cameraPos.value.copy(camera.position);
                 
                 // Update frozen model matrix for world-space dissipation

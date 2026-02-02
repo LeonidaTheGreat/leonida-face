@@ -2837,8 +2837,9 @@
             }
             
             // === CPU-SIDE SPAWN POSITION TRACKING ===
-            // Update spawn world positions when particles respawn
-            if (settings.emissionEnabled && window._emissionState && pointsMesh && skinnedMesh) {
+            // DISABLED: No longer needed - shader now uses worldBasePos directly for emission
+            // This was causing major lag at load due to applyBoneTransform calls
+            if (false && settings.emissionEnabled && window._emissionState && pointsMesh && skinnedMesh) {
                 const state = window._emissionState;
                 const cycleSpeed = settings.emissionSpeed / 100 * 0.5;
                 const geom = pointsMesh.geometry;

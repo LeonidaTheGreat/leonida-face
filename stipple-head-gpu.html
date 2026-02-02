@@ -163,6 +163,12 @@
         <h3>Model</h3>
         
         <div class="slider-row">
+            <label>Model Z Offset (towards/away from camera)</label>
+            <input type="range" id="modelZOffset" min="-200" max="200" value="0">
+            <span id="modelZOffsetValue">0</span>
+        </div>
+        
+        <div class="slider-row">
             <label>Select Model</label>
             <select id="modelSelect">
                 <option value="walt">Walt Head</option>
@@ -597,6 +603,7 @@
         
         // Default settings
         const defaultSettings = {
+            modelZOffset: 0,
             size: 0.1,
             sizeMin: 0.05,
             sizeMax: 1,
@@ -774,6 +781,10 @@
             
             document.getElementById('background').value = settings.background;
             scene.background = new THREE.Color(settings.background === 'dark' ? 0x1a1a2e : 0xf5f5f5);
+            
+            // Model Z offset
+            document.getElementById('modelZOffset').value = settings.modelZOffset;
+            document.getElementById('modelZOffsetValue').textContent = settings.modelZOffset;
             
             // Assembly settings
             document.getElementById('assemblyDirection').value = settings.assemblyDirection;
@@ -2945,6 +2956,16 @@
         // Assembly buttons
         document.getElementById('disassembleBtn').addEventListener('click', disassemble);
         document.getElementById('assembleBtn').addEventListener('click', assemble);
+        
+        // Model Z offset slider
+        document.getElementById('modelZOffset').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            settings.modelZOffset = val;
+            document.getElementById('modelZOffsetValue').textContent = val;
+            if (modelGroup) {
+                modelGroup.position.z = val / 100; // Scale down for reasonable range
+            }
+        });
         
         // Model selector
         document.getElementById('modelSelect').addEventListener('change', (e) => {

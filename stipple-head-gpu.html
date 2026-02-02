@@ -157,6 +157,7 @@
         <button class="toggle-btn" id="disassembleBtn">💨 Disassemble</button>
         <button class="toggle-btn" id="assembleBtn">🧲 Assemble</button>
         <button class="toggle-btn" id="animateBtn">🎭 Animate</button>
+        <button class="toggle-btn" id="rotationModeBtn">🔄 Rotate: Camera</button>
     </div>
     
     <div class="controls" id="controls">
@@ -644,14 +645,19 @@
         controls.target.set(0, 0, 0); // Center of model
         controls.update();
         
-        // Model rotation mode (instead of camera orbit)
-        let rotateModelMode = true; // Default: rotate model, not camera
+        // Rotation mode toggle: camera orbit vs model rotation
+        let rotateModelMode = false; // Default: rotate camera (orbit)
         let isDragging = false;
         let previousMouseX = 0;
         let previousMouseY = 0;
         
-        if (rotateModelMode) {
-            controls.enabled = false; // Disable orbit controls
+        function setRotationMode(rotateModel) {
+            rotateModelMode = rotateModel;
+            controls.enabled = !rotateModel;
+            const btn = document.getElementById('rotationModeBtn');
+            if (btn) {
+                btn.textContent = rotateModel ? '🔄 Rotate: Model' : '🔄 Rotate: Camera';
+            }
         }
         
         renderer.domElement.addEventListener('mousedown', (e) => {
@@ -3248,6 +3254,13 @@
                 modelGroup.rotation.set(0, 0, 0);
                 modelGroup.position.set(0, 0, 0);
             }
+        });
+        
+        // Rotation mode toggle (Camera vs Model)
+        document.getElementById('rotationModeBtn').addEventListener('click', () => {
+            setRotationMode(!rotateModelMode);
+            const btn = document.getElementById('rotationModeBtn');
+            btn.style.background = rotateModelMode ? 'rgba(100,255,100,0.3)' : '';
         });
         
         // Save defaults

@@ -2256,8 +2256,15 @@
                             // Particles further back are hidden - creates "evaporation edge" effect
                             float boundaryThickness = 0.15; // Thin emission zone at boundary
                             
-                            if (falloff > boundaryThickness) {
-                                // Too far past boundary - hide this particle
+                            // Check if particle is VISIBLE (facing camera, not on back side)
+                            vec3 particleWorldPos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
+                            vec3 toCamera = normalize(cameraPos - particleWorldPos);
+                            vec3 particleNormal = normalize(particleWorldPos); // Approximate normal as radial
+                            float facingCamera = dot(particleNormal, toCamera);
+                            bool isVisible = facingCamera > -0.1; // Visible if roughly facing camera
+                            
+                            if (falloff > boundaryThickness || !isVisible) {
+                                // Too far past boundary OR not visible - hide this particle
                                 emissionAlphaEffect = 0.0;
                                 vEmissionSizeMult = 0.0;
                             } else {

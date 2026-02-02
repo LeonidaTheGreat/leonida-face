@@ -2172,40 +2172,45 @@
                         // === EMISSION SYSTEM ===
                         // Only applies to particles in the dissipation zone (falloff > 0)
                         // Front particles stay anchored to surface
-                        // IMPORTANT: Emitted particles DETACH from skeleton - they float in world space
+                        // IMPORTANT: Emitted particles DETACH and float in WORLD SPACE
+                        float emissionActive = 0.0;
+                        vec3 emissionWorldPos = vec3(0.0);
+                        
                         if (emissionEnabled > 0.5 && falloff > 0.01) {
+                            emissionActive = 1.0;
+                            
                             // Per-particle lifecycle timing
-                            // Each particle has unique phase offset from seeds
-                            float cycleSpeed = emissionSpeed * 0.5; // Slower = longer lifetime
-                            float phaseOffset = seeds.x * 6.28318 + seeds.y * 3.14159; // Random start phase
-                            float speedVariation = 0.7 + seeds.z * 0.6; // 0.7-1.3x speed variation
+                            float cycleSpeed = emissionSpeed * 0.5;
+                            float phaseOffset = seeds.x * 6.28318 + seeds.y * 3.14159;
+                            float speedVariation = 0.7 + seeds.z * 0.6;
                             
                             // Lifecycle phase: 0 = just spawned, 1 = about to respawn
                             float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
                             
-                            // === DETACHMENT: Blend from animated to rest position ===
-                            // At lifecycle=0: particle at animated position (attached)
-                            // As lifecycle increases: particle detaches toward rest position + drift
-                            // This creates the "emitted/detached" effect
-                            float detachProgress = lifecycle * falloff; // Faster detach for more dissipated particles
+                            // === WORLD SPACE EMISSION ===
+                            // 1. Get current animated world position (where particle would be if attached)
+                            vec3 attachedWorldPos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
                             
-                            // Rest position = constellationPosition (non-animated)
-                            // Animated position = current basePosition (from GPU skinning)
-                            // Blend between them as particle drifts
-                            vec3 restPos = constellationPosition;
-                            vec3 detachedBase = mix(basePosition, restPos, detachProgress);
+                            // 2. Compute spawn world position using frozenModelMatrix
+                            //    This is where the particle was when it "detached"
+                            vec3 spawnWorldPos = (frozenModelMatrix * vec4(basePosition, 1.0)).xyz;
                             
-                            // Use detached base for drift calculations
-                            vec3 radial = normalize(detachedBase);
-                            // Add upward bias based on emissionDirection
-                            vec3 upBias = vec3(0.0, 1.0, 0.0);
-                            vec3 driftDir = normalize(mix(radial, upBias, emissionDirection));
+                            // 3. Blend from attached to spawn based on lifecycle and falloff
+                            //    lifecycle=0: at attached position (just spawned from current pose)
+                            //    lifecycle>0: progressively at frozen spawn position
+                            float detachAmount = min(lifecycle * 3.0, 1.0) * falloff; // Quick detach
+                            vec3 currentWorldBase = mix(attachedWorldPos, spawnWorldPos, detachAmount);
                             
-                            // Add per-particle direction variation using drift attribute
-                            vec3 particleVariation = normalize(drift);
-                            driftDir = normalize(driftDir + particleVariation * 0.3);
+                            // 4. Compute drift direction in WORLD SPACE
+                            vec3 worldRadial = normalize(currentWorldBase);
+                            vec3 worldUp = vec3(0.0, 1.0, 0.0);
+                            vec3 worldDriftDir = normalize(mix(worldRadial, worldUp, emissionDirection));
                             
-                            // Add turbulence (curl noise approximation)
+                            // Per-particle direction variation (transform drift to world space)
+                            vec3 worldDrift = normalize(mat3(frozenModelMatrix) * drift);
+                            worldDriftDir = normalize(worldDriftDir + worldDrift * 0.3);
+                            
+                            // Add turbulence in world space
                             if (emissionTurbulence > 0.0) {
                                 float turbPhase = lifecycle * 6.28318 + seeds.w * 3.14159;
                                 vec3 turbOffset = vec3(
@@ -2213,26 +2218,24 @@
                                     sin(turbPhase * 0.7 + seeds.y * 10.0),
                                     cos(turbPhase * 1.1 + seeds.z * 10.0)
                                 );
-                                driftDir = normalize(driftDir + turbOffset * emissionTurbulence * 0.5);
+                                worldDriftDir = normalize(worldDriftDir + turbOffset * emissionTurbulence * 0.5);
                             }
                             
-                            // Drift distance increases with lifecycle (ease-out curve)
-                            // Scale by falloff so edge particles drift more than transition particles
-                            float driftProgress = 1.0 - pow(1.0 - lifecycle, 2.0); // Ease-out
-                            float driftDist = driftProgress * emissionDrift * 0.5 * falloff; // Scale by falloff
+                            // 5. Drift distance (ease-out curve)
+                            float driftProgress = 1.0 - pow(1.0 - lifecycle, 2.0);
+                            float driftDist = driftProgress * emissionDrift * 0.5 * falloff;
                             
-                            // Apply detachment: replace pos with detached position + drift
-                            pos = detachedBase + driftDir * driftDist;
+                            // 6. Final world position = spawn point + drift
+                            emissionWorldPos = currentWorldBase + worldDriftDir * driftDist;
                             
                             // Alpha fade based on lifecycle
-                            // Starts fading at emissionFadeStart% of lifecycle
                             float fadeProgress = max(0.0, (lifecycle - emissionFadeStart) / (1.0 - emissionFadeStart + 0.001));
                             emissionAlphaEffect = 1.0 - fadeProgress;
                             emissionAlphaEffect = clamp(emissionAlphaEffect, 0.0, 1.0);
                             
-                            // Size decay (shrink as particles travel) - scale by falloff
+                            // Size decay
                             vEmissionSizeMult = 1.0 - lifecycle * emissionSizeDecay * falloff;
-                            vEmissionSizeMult = max(vEmissionSizeMult, 0.1); // Don't shrink to zero
+                            vEmissionSizeMult = max(vEmissionSizeMult, 0.1);
                         }
                         
                         // Alpha based on dissipation + emission
@@ -2277,19 +2280,20 @@
                         float sizeScale = (1.0 - falloff * 0.5) * vEmissionSizeMult;
                         
                         // === World position with detachment ===
-                        // Use frozenModelMatrix for dissipated particles (captures rotation at reference time)
-                        // This makes dissipated particles world-fixed
-                        
                         vec4 worldPos;
-                        if (falloff > 0.01) {
-                            // Blend between current model transform and frozen transform
+                        
+                        if (emissionActive > 0.5) {
+                            // Emitted particles: use pre-computed world position
+                            // This makes them truly world-fixed, independent of model animation
+                            worldPos = vec4(emissionWorldPos, 1.0);
+                        } else if (falloff > 0.01) {
+                            // Non-emission dissipation: blend between current and frozen transform
                             vec3 attachedWorld = (modelMatrix * vec4(pos, 1.0)).xyz;
                             vec3 frozenWorld = (frozenModelMatrix * vec4(pos, 1.0)).xyz;
-                            
-                            // More dissipation = more frozen (world-fixed)
                             vec3 blendedWorld = mix(attachedWorld, frozenWorld, falloff);
                             worldPos = vec4(blendedWorld + dissipationWorldOffset, 1.0);
                         } else {
+                            // Front particles: attached to model
                             worldPos = modelMatrix * vec4(pos, 1.0);
                         }
                         

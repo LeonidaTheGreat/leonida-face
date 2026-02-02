@@ -393,6 +393,20 @@
             <input type="range" id="emissionSizeDecay" min="0" max="100" value="50">
         </div>
         
+        <h3>Heat-up & Pop</h3>
+        
+        <div class="slider-row">
+            <label>Heat Duration (% before pop)</label>
+            <input type="range" id="emissionHeatDuration" min="0" max="50" value="20">
+            <span id="emissionHeatDurationValue">20%</span>
+        </div>
+        
+        <div class="slider-row">
+            <label>Pop Intensity (initial burst)</label>
+            <input type="range" id="emissionPopIntensity" min="0" max="200" value="50">
+            <span id="emissionPopIntensityValue">50</span>
+        </div>
+        
         <h3>Legacy Surface Animation</h3>
         
         <div class="slider-row">
@@ -645,6 +659,9 @@
             emissionFadeStart: 40,
             emissionEasing: 'ease-out',
             emissionSizeDecay: 50,
+            // Heat-up and Pop phases
+            emissionHeatDuration: 20, // % of lifecycle spent heating up (attached)
+            emissionPopIntensity: 50, // Initial pop velocity when detaching
             // Legacy surface animation
             surfaceFloat: 3,
             surfaceFloatMin: 0,
@@ -757,6 +774,8 @@
             document.getElementById('emissionFadeStart').value = settings.emissionFadeStart;
             document.getElementById('emissionEasing').value = settings.emissionEasing;
             document.getElementById('emissionSizeDecay').value = settings.emissionSizeDecay;
+            document.getElementById('emissionHeatDuration').value = settings.emissionHeatDuration;
+            document.getElementById('emissionPopIntensity').value = settings.emissionPopIntensity;
             
             // Legacy surface animation
             document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
@@ -1848,6 +1867,8 @@
                     emissionFadeStart: { value: settings.emissionFadeStart / 100 },
                     emissionEasing: { value: settings.emissionEasing === 'ease-in' ? 1 : settings.emissionEasing === 'ease-out' ? 2 : settings.emissionEasing === 'ease-in-out' ? 3 : 0 },
                     emissionSizeDecay: { value: settings.emissionSizeDecay / 100 },
+                    emissionHeatDuration: { value: settings.emissionHeatDuration / 100 },
+                    emissionPopIntensity: { value: settings.emissionPopIntensity / 100 },
                     assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
                     assemblyDirection: { value: settings.assemblyDirection === 'above' ? 1 : settings.assemblyDirection === 'below' ? 2 : 0 },
                     assemblySpread: { value: settings.assemblySpread / 100 },
@@ -1935,6 +1956,8 @@
                     uniform float emissionFadeStart;
                     uniform int emissionEasing;
                     uniform float emissionSizeDecay;
+                    uniform float emissionHeatDuration;
+                    uniform float emissionPopIntensity;
                     uniform float assemblyProgress;
                     uniform int assemblyDirection;
                     uniform float assemblySpread;
@@ -2338,17 +2361,13 @@
                         
                         if (emissionEnabled > 0.5 && falloff > 0.01) {
                             // Only emit particles AT the Effect Start boundary plane
-                            // falloff is already camera-relative (from depth calculation)
-                            // So particles along the entire boundary ring will emit
-                            float boundaryThickness = 0.15; // Thin emission zone at boundary
+                            float boundaryThickness = 0.15;
                             
                             if (falloff > boundaryThickness) {
                                 // Too far past boundary - hide this particle
                                 emissionAlphaEffect = 0.0;
                                 vEmissionSizeMult = 0.0;
                             } else {
-                                emissionActive = 1.0;
-                                
                                 // Per-particle lifecycle timing
                                 float cycleSpeed = emissionSpeed * 0.5;
                                 float phaseOffset = seeds.x * 6.28318 + seeds.y * 3.14159;
@@ -2357,98 +2376,122 @@
                                 // Lifecycle phase: 0 = just spawned, 1 = about to respawn
                                 float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
                                 
-                                // === CAMERA-RELATIVE EMISSION ===
-                                // Use CURRENT animated world position for boundary particles
-                                // This ensures particles emit from where they ARE, not where they WERE at respawn
-                                vec3 frozenSpawnPos = worldBasePos;
+                                // === THREE-PHASE EMISSION ===
+                                // Phase 1: Heat-up (0 to heatDuration) - glow increases, stay attached
+                                // Phase 2: Pop (at heatDuration) - detach with initial velocity
+                                // Phase 3: Float (heatDuration to 1) - drift up and fade
                                 
-                                // === PHASED DRIFT DIRECTION ===
-                                // Radial and Camera drift fade out over their duration
-                                // Upward drift is constant, creating "evaporate up" effect
+                                bool inHeatPhase = lifecycle < emissionHeatDuration;
                                 
-                                // Radial direction from MODEL center
-                                // worldBasePos is already relative to model, just normalize
-                                vec3 radialDir = normalize(basePosition); // Away from model center (local space direction)
-                                vec3 screenUp = cameraUp; // Camera's up direction (screen-up)
+                                // Directions for drift
+                                vec3 radialDir = normalize(basePosition); // Local space direction from center
+                                vec3 screenUp = cameraUp;
                                 vec3 awayFromCamera = cameraDir;
                                 
-                                // Calculate fade factors based on lifecycle vs duration
-                                // If lifecycle < duration: full strength; after duration: fade to 0
-                                float radialFade = 1.0 - smoothstep(emissionRadialDuration * 0.8, emissionRadialDuration, lifecycle);
-                                float cameraFade = 1.0 - smoothstep(emissionCameraDuration * 0.8, emissionCameraDuration, lifecycle);
-                                
-                                // Apply strengths with fade
-                                float radialAmount = emissionRadialStrength * radialFade;
-                                float cameraAmount = emissionCameraDrift * cameraFade;
-                                float upwardAmount = emissionUpwardStrength; // Constant, doesn't fade
-                                
-                                // Combine all drift components
-                                vec3 totalDrift = radialDir * radialAmount + 
-                                                  awayFromCamera * cameraAmount + 
-                                                  screenUp * upwardAmount;
-                                
-                                vec3 cameraDriftDir = length(totalDrift) > 0.001 ? normalize(totalDrift) : screenUp;
-                                
-                                // Per-particle direction variation
-                                vec3 particleVariation = normalize(drift);
-                                vec3 worldDriftDir = normalize(cameraDriftDir + particleVariation * 0.3);
-                                
-                                // Add turbulence
-                                if (emissionTurbulence > 0.0) {
-                                    float turbPhase = lifecycle * 6.28318 + seeds.w * 3.14159;
-                                    vec3 turbOffset = vec3(
-                                        sin(turbPhase + seeds.x * 10.0) * cos(turbPhase * 1.3),
-                                        sin(turbPhase * 0.7 + seeds.y * 10.0),
-                                        cos(turbPhase * 1.1 + seeds.z * 10.0)
-                                    );
-                                    worldDriftDir = normalize(worldDriftDir + turbOffset * emissionTurbulence * 0.5);
-                                }
-                                
-                                // Apply easing to lifecycle for drift
-                                float easedLifecycle;
-                                if (emissionEasing == 0) {
-                                    easedLifecycle = lifecycle; // Linear
-                                } else if (emissionEasing == 1) {
-                                    easedLifecycle = lifecycle * lifecycle; // Ease-in
-                                } else if (emissionEasing == 2) {
-                                    easedLifecycle = 1.0 - pow(1.0 - lifecycle, 2.0); // Ease-out
+                                if (inHeatPhase) {
+                                    // === HEAT-UP PHASE ===
+                                    // Particle stays attached (local space), glow increases
+                                    emissionActive = 0.0; // Stay in local space
+                                    
+                                    // Heat progress: 0 at start, 1 at pop moment
+                                    float heatProgress = lifecycle / max(emissionHeatDuration, 0.01);
+                                    
+                                    // Glow intensifies as we approach pop
+                                    float heatGlow = 1.0 + heatProgress * heatProgress * emissionIntensity * 2.0;
+                                    emissionAlphaEffect = heatGlow;
+                                    
+                                    // Slight size increase during heat-up
+                                    vEmissionSizeMult = 1.0 + heatProgress * 0.3;
+                                    
                                 } else {
-                                    easedLifecycle = lifecycle * lifecycle * (3.0 - 2.0 * lifecycle); // Ease-in-out
+                                    // === POP & FLOAT PHASES ===
+                                    emissionActive = 1.0; // Detach to world space
+                                    
+                                    // Time since pop (0 at pop, increases after)
+                                    float timeSincePop = (lifecycle - emissionHeatDuration) / max(1.0 - emissionHeatDuration, 0.01);
+                                    
+                                    // Combine drift directions
+                                    float radialFade = 1.0 - smoothstep(emissionRadialDuration * 0.8, emissionRadialDuration, timeSincePop);
+                                    float cameraFade = 1.0 - smoothstep(emissionCameraDuration * 0.8, emissionCameraDuration, timeSincePop);
+                                    
+                                    float radialAmount = emissionRadialStrength * radialFade;
+                                    float cameraAmount = emissionCameraDrift * cameraFade;
+                                    float upwardAmount = emissionUpwardStrength;
+                                    
+                                    vec3 totalDrift = radialDir * radialAmount + 
+                                                      awayFromCamera * cameraAmount + 
+                                                      screenUp * upwardAmount;
+                                    
+                                    vec3 driftDir = length(totalDrift) > 0.001 ? normalize(totalDrift) : screenUp;
+                                    
+                                    // Add per-particle variation
+                                    vec3 particleVariation = normalize(drift);
+                                    vec3 worldDriftDir = normalize(driftDir + particleVariation * 0.3);
+                                    
+                                    // Add turbulence
+                                    if (emissionTurbulence > 0.0) {
+                                        float turbPhase = timeSincePop * 6.28318 + seeds.w * 3.14159;
+                                        vec3 turbOffset = vec3(
+                                            sin(turbPhase + seeds.x * 10.0) * cos(turbPhase * 1.3),
+                                            sin(turbPhase * 0.7 + seeds.y * 10.0),
+                                            cos(turbPhase * 1.1 + seeds.z * 10.0)
+                                        );
+                                        worldDriftDir = normalize(worldDriftDir + turbOffset * emissionTurbulence * 0.5);
+                                    }
+                                    
+                                    // Apply easing
+                                    float easedTime;
+                                    if (emissionEasing == 0) {
+                                        easedTime = timeSincePop;
+                                    } else if (emissionEasing == 1) {
+                                        easedTime = timeSincePop * timeSincePop;
+                                    } else if (emissionEasing == 2) {
+                                        easedTime = 1.0 - pow(1.0 - timeSincePop, 2.0);
+                                    } else {
+                                        easedTime = timeSincePop * timeSincePop * (3.0 - 2.0 * timeSincePop);
+                                    }
+                                    
+                                    // === POP: Initial burst velocity ===
+                                    // Pop gives instant displacement at the moment of detachment
+                                    float popDist = emissionPopIntensity * 0.3;
+                                    
+                                    // === FLOAT: Gradual drift ===
+                                    float floatDist = easedTime * emissionDrift * 0.5;
+                                    
+                                    // Total distance = pop + float
+                                    float totalDist = popDist + floatDist;
+                                    
+                                    // Final position: world position + drift
+                                    emissionWorldPos = worldBasePos + worldDriftDir * totalDist;
+                                    
+                                    // === FLOAT PHASE: Evaporation effect ===
+                                    // Intensity boost at pop, fading over float
+                                    float intensityBoost = emissionIntensity * (1.0 - easedTime);
+                                    
+                                    // Fade based on time since pop
+                                    float adjustedFadeStart = max(0.0, (emissionFadeStart - emissionHeatDuration) / (1.0 - emissionHeatDuration));
+                                    float fadeProgress = max(0.0, (timeSincePop - adjustedFadeStart) / (1.0 - adjustedFadeStart + 0.001));
+                                    
+                                    // Apply easing to fade
+                                    float easedFade;
+                                    if (emissionEasing == 0) {
+                                        easedFade = fadeProgress;
+                                    } else if (emissionEasing == 1) {
+                                        easedFade = fadeProgress * fadeProgress;
+                                    } else if (emissionEasing == 2) {
+                                        easedFade = 1.0 - pow(1.0 - fadeProgress, 2.0);
+                                    } else {
+                                        easedFade = fadeProgress * fadeProgress * (3.0 - 2.0 * fadeProgress);
+                                    }
+                                    
+                                    // Combine intensity boost with fade
+                                    emissionAlphaEffect = (1.0 + intensityBoost) * (1.0 - easedFade);
+                                    emissionAlphaEffect = clamp(emissionAlphaEffect, 0.0, 3.0);
+                                    
+                                    // Size: larger at pop, shrinks over time
+                                    vEmissionSizeMult = (1.0 + intensityBoost * 0.3) * (1.0 - timeSincePop * emissionSizeDecay);
+                                    vEmissionSizeMult = max(vEmissionSizeMult, 0.1);
                                 }
-                                
-                                // Drift distance
-                                float driftDist = easedLifecycle * emissionDrift * 0.5;
-                                
-                                // Final position = FROZEN spawn point + drift
-                                emissionWorldPos = frozenSpawnPos + worldDriftDir * driftDist;
-                                
-                                // === EVAPORATION EFFECT ===
-                                // High intensity at spawn, fading over lifecycle
-                                // Initial intensity boost creates "evaporating" glow
-                                float intensityBoost = emissionIntensity * (1.0 - easedLifecycle);
-                                
-                                // Alpha: starts at intensity, fades based on fadeStart
-                                float fadeProgress = max(0.0, (lifecycle - emissionFadeStart) / (1.0 - emissionFadeStart + 0.001));
-                                
-                                // Apply easing to fade
-                                float easedFade;
-                                if (emissionEasing == 0) {
-                                    easedFade = fadeProgress;
-                                } else if (emissionEasing == 1) {
-                                    easedFade = fadeProgress * fadeProgress;
-                                } else if (emissionEasing == 2) {
-                                    easedFade = 1.0 - pow(1.0 - fadeProgress, 2.0);
-                                } else {
-                                    easedFade = fadeProgress * fadeProgress * (3.0 - 2.0 * fadeProgress);
-                                }
-                                
-                                // Combine intensity boost with fade
-                                emissionAlphaEffect = (1.0 + intensityBoost) * (1.0 - easedFade);
-                                emissionAlphaEffect = clamp(emissionAlphaEffect, 0.0, 3.0); // Allow > 1 for glow
-                                
-                                // Size: larger at spawn (evaporation burst), shrinks over time
-                                vEmissionSizeMult = (1.0 + intensityBoost * 0.3) * (1.0 - lifecycle * emissionSizeDecay);
-                                vEmissionSizeMult = max(vEmissionSizeMult, 0.1);
                             }
                         }
                         
@@ -3068,6 +3111,8 @@
             settings.emissionFadeStart = parseFloat(document.getElementById('emissionFadeStart').value);
             settings.emissionEasing = document.getElementById('emissionEasing').value;
             settings.emissionSizeDecay = parseFloat(document.getElementById('emissionSizeDecay').value);
+            settings.emissionHeatDuration = parseFloat(document.getElementById('emissionHeatDuration').value);
+            settings.emissionPopIntensity = parseFloat(document.getElementById('emissionPopIntensity').value);
             // Legacy surface animation
             settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
             settings.surfaceFloatMin = parseFloat(document.getElementById('surfaceFloatMin').value);
@@ -3182,7 +3227,7 @@
         setupEmissionSlider('emissionDrift', 'emissionDrift');
         
         // Emission sliders without min/max
-        ['emissionRadialStrength', 'emissionRadialDuration', 'emissionCameraDrift', 'emissionCameraDuration', 'emissionUpwardStrength', 'emissionTurbulence', 'emissionIntensity', 'emissionFadeStart', 'emissionSizeDecay'].forEach(id => {
+        ['emissionRadialStrength', 'emissionRadialDuration', 'emissionCameraDrift', 'emissionCameraDuration', 'emissionUpwardStrength', 'emissionTurbulence', 'emissionIntensity', 'emissionFadeStart', 'emissionSizeDecay', 'emissionHeatDuration', 'emissionPopIntensity'].forEach(id => {
             document.getElementById(id).addEventListener('input', (e) => {
                 settings[id] = parseFloat(e.target.value);
                 if (pointsMesh) {

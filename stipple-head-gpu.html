@@ -2351,17 +2351,17 @@
                                 float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
                                 
                                 // === CAMERA-RELATIVE EMISSION ===
-                                // Use CPU-tracked spawn position (frozen at respawn time)
-                                // spawnWorldPosition is already in world space (includes model offset via matrixWorld)
-                                vec3 frozenSpawnPos = spawnWorldPosition;
+                                // Use CURRENT animated world position for boundary particles
+                                // This ensures particles emit from where they ARE, not where they WERE at respawn
+                                vec3 frozenSpawnPos = worldBasePos;
                                 
                                 // === PHASED DRIFT DIRECTION ===
                                 // Radial and Camera drift fade out over their duration
                                 // Upward drift is constant, creating "evaporate up" effect
                                 
-                                // Radial direction from MODEL center (not world origin)
-                                // Subtract modelOffset to get position relative to model center
-                                vec3 radialDir = normalize(frozenSpawnPos - modelOffset); // Away from model center
+                                // Radial direction from MODEL center
+                                // worldBasePos is already relative to model, just normalize
+                                vec3 radialDir = normalize(basePosition); // Away from model center (local space direction)
                                 vec3 screenUp = cameraUp; // Camera's up direction (screen-up)
                                 vec3 awayFromCamera = cameraDir;
                                 

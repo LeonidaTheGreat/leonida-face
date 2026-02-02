@@ -2232,19 +2232,24 @@
                                 // Lifecycle phase: 0 = just spawned, 1 = about to respawn
                                 float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
                                 
-                                // === WORLD SPACE EMISSION ===
-                                // Use REST position for stable world coordinates
-                                // (animated position changes every frame, can't truly detach)
+                                // === CAMERA-RELATIVE EMISSION ===
+                                // Matches the Effect Start plane reference frame
+                                // Particles drift AWAY from camera (same direction as dissipation)
+                                
+                                // Use REST position for stable coordinates
                                 vec3 restWorldPos = (modelMatrix * vec4(constellationPosition, 1.0)).xyz;
                                 
-                                // Compute drift direction in WORLD SPACE
-                                vec3 worldRadial = normalize(restWorldPos);
+                                // Drift direction = away from camera (matches Effect Start reference)
+                                // cameraDir points where camera looks, so particles drift along +cameraDir (away)
+                                vec3 awayFromCamera = cameraDir;
+                                
+                                // Add some spread/variation 
                                 vec3 worldUp = vec3(0.0, 1.0, 0.0);
-                                vec3 worldDriftDir = normalize(mix(worldRadial, worldUp, emissionDirection));
+                                vec3 cameraDriftDir = normalize(mix(awayFromCamera, worldUp, emissionDirection * 0.5));
                                 
                                 // Per-particle direction variation
-                                vec3 worldDrift = normalize(mat3(modelMatrix) * drift);
-                                worldDriftDir = normalize(worldDriftDir + worldDrift * 0.3);
+                                vec3 particleVariation = normalize(drift);
+                                vec3 worldDriftDir = normalize(cameraDriftDir + particleVariation * 0.3);
                                 
                                 // Add turbulence in world space
                                 if (emissionTurbulence > 0.0) {

@@ -1754,6 +1754,8 @@
                     isDisassembling: { value: 0.0 },
                     // GPU Skinning uniforms
                     boneTexture: { value: null },
+                    frozenBoneTexture: { value: null },
+                    hasFrozenBones: { value: false },
                     boneCount: { value: 0 },
                     bindMatrix: { value: new THREE.Matrix4() },
                     bindMatrixInverse: { value: new THREE.Matrix4() },
@@ -1780,6 +1782,8 @@
                     
                     // GPU Skinning uniforms
                     uniform sampler2D boneTexture;
+                    uniform sampler2D frozenBoneTexture;
+                    uniform bool hasFrozenBones;
                     uniform int boneCount;
                     uniform mat4 bindMatrix;
                     uniform mat4 bindMatrixInverse;
@@ -1854,12 +1858,43 @@
                         return mat4(v1, v2, v3, v4);
                     }
                     
+                    // GPU Skinning: Read bone matrix from FROZEN texture (for emitted particles)
+                    mat4 getFrozenBoneMatrix(float boneIdx) {
+                        float size = float(textureSize(frozenBoneTexture, 0).x);
+                        float j = boneIdx * 4.0;
+                        float x = mod(j, size);
+                        float y = floor(j / size);
+                        float dx = 1.0 / size;
+                        float dy = 1.0 / size;
+                        y = dy * (y + 0.5);
+                        vec4 v1 = texture2D(frozenBoneTexture, vec2(dx * (x + 0.5), y));
+                        vec4 v2 = texture2D(frozenBoneTexture, vec2(dx * (x + 1.5), y));
+                        vec4 v3 = texture2D(frozenBoneTexture, vec2(dx * (x + 2.5), y));
+                        vec4 v4 = texture2D(frozenBoneTexture, vec2(dx * (x + 3.5), y));
+                        return mat4(v1, v2, v3, v4);
+                    }
+                    
                     // GPU Skinning: Apply bone transform to vertex
                     vec3 applyGPUSkinning(vec3 pos, vec4 skinIdx, vec4 skinWgt) {
                         mat4 boneMatX = getBoneMatrix(skinIdx.x);
                         mat4 boneMatY = getBoneMatrix(skinIdx.y);
                         mat4 boneMatZ = getBoneMatrix(skinIdx.z);
                         mat4 boneMatW = getBoneMatrix(skinIdx.w);
+                        vec4 skinVertex = bindMatrix * vec4(pos, 1.0);
+                        vec4 skinned = vec4(0.0);
+                        skinned += boneMatX * skinVertex * skinWgt.x;
+                        skinned += boneMatY * skinVertex * skinWgt.y;
+                        skinned += boneMatZ * skinVertex * skinWgt.z;
+                        skinned += boneMatW * skinVertex * skinWgt.w;
+                        return (bindMatrixInverse * skinned).xyz;
+                    }
+                    
+                    // GPU Skinning: Apply FROZEN bone transform (for emitted particles)
+                    vec3 applyFrozenGPUSkinning(vec3 pos, vec4 skinIdx, vec4 skinWgt) {
+                        mat4 boneMatX = getFrozenBoneMatrix(skinIdx.x);
+                        mat4 boneMatY = getFrozenBoneMatrix(skinIdx.y);
+                        mat4 boneMatZ = getFrozenBoneMatrix(skinIdx.z);
+                        mat4 boneMatW = getFrozenBoneMatrix(skinIdx.w);
                         vec4 skinVertex = bindMatrix * vec4(pos, 1.0);
                         vec4 skinned = vec4(0.0);
                         skinned += boneMatX * skinVertex * skinWgt.x;
@@ -2187,14 +2222,23 @@
                             // Lifecycle phase: 0 = just spawned, 1 = about to respawn
                             float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
                             
-                            // === WORLD SPACE EMISSION ===
-                            // Use REST POSE position (constellationPosition) to decouple from animation
-                            // This makes emitted particles completely independent of skeleton movement
-                            vec3 restPos = constellationPosition;
+                            // === WORLD SPACE EMISSION with FROZEN BONES ===
+                            // Use frozen bone matrices to get position at "freeze time"
+                            // This decouples emitted particles from current animation
+                            vec3 frozenSkinnedPos;
+                            if (useGPUSkinning && hasFrozenBones) {
+                                // Apply frozen bone transforms to get stable animated position
+                                vec3 pos1 = applyFrozenGPUSkinning(restPosition, skinIndex, skinWeight);
+                                vec3 pos2 = applyFrozenGPUSkinning(neighborRestPosition, neighborSkinIndex, neighborSkinWeight);
+                                vec3 skinnedPos = mix(pos1, pos2, edgeFactor);
+                                frozenSkinnedPos = (skinnedPos - normCenter) * normScale;
+                            } else {
+                                // Fallback to constellation position
+                                frozenSkinnedPos = constellationPosition;
+                            }
                             
-                            // Transform rest position to world space using frozen model matrix
-                            // This gives a stable world position that doesn't change with animation
-                            vec3 currentWorldBase = (frozenModelMatrix * vec4(restPos, 1.0)).xyz;
+                            // Transform frozen skinned position to world space
+                            vec3 currentWorldBase = (frozenModelMatrix * vec4(frozenSkinnedPos, 1.0)).xyz;
                             
                             // 4. Compute drift direction in WORLD SPACE
                             vec3 worldRadial = normalize(currentWorldBase);
@@ -2421,6 +2465,10 @@
             return true;
         }
         
+        let frozenBoneTexture = null;
+        let lastBoneFreezeTime = 0;
+        const BONE_FREEZE_INTERVAL = 2.0; // Freeze bones every 2 seconds
+        
         function setupGPUSkinning() {
             if (!skinnedMesh || !skinnedMesh.skeleton || !pointsMesh || !skeletonNormParams) {
                 console.warn('Cannot setup GPU skinning - missing components');
@@ -2432,8 +2480,23 @@
                 skeleton.computeBoneTexture();
             }
             
+            // Create frozen bone texture (same size as original)
+            const size = skeleton.boneTexture.image.width;
+            frozenBoneTexture = new THREE.DataTexture(
+                new Float32Array(size * size * 4),
+                size, size,
+                THREE.RGBAFormat,
+                THREE.FloatType
+            );
+            frozenBoneTexture.needsUpdate = true;
+            
+            // Initial freeze
+            freezeBoneTexture();
+            
             const material = pointsMesh.material;
             material.uniforms.boneTexture = { value: skeleton.boneTexture };
+            material.uniforms.frozenBoneTexture = { value: frozenBoneTexture };
+            material.uniforms.hasFrozenBones = { value: true };
             material.uniforms.boneCount = { value: skeleton.bones.length };
             material.uniforms.bindMatrix = { value: skinnedMesh.bindMatrix };
             material.uniforms.bindMatrixInverse = { value: skinnedMesh.bindMatrixInverse };
@@ -2444,6 +2507,26 @@
             gpuSkinningEnabled = true;
             console.log('GPU Skinning setup complete:', skeleton.bones.length, 'bones');
             return true;
+        }
+        
+        function freezeBoneTexture() {
+            if (!skinnedMesh || !skinnedMesh.skeleton || !frozenBoneTexture) return;
+            
+            const skeleton = skinnedMesh.skeleton;
+            const srcData = skeleton.boneTexture.image.data;
+            const dstData = frozenBoneTexture.image.data;
+            
+            // Copy current bone texture data to frozen texture
+            dstData.set(srcData);
+            frozenBoneTexture.needsUpdate = true;
+            
+            // Also freeze the model matrix
+            if (pointsMesh && modelGroup) {
+                modelGroup.updateMatrixWorld();
+                pointsMesh.material.uniforms.frozenModelMatrix.value.copy(modelGroup.matrixWorld);
+            }
+            
+            console.log('Bone texture frozen at time:', time.toFixed(2));
         }
         
         // ============================================================
@@ -2581,6 +2664,14 @@
                 // Update skeleton - GPU skinning handles the rest in shader
                 if (skinnedMesh && skinnedMesh.skeleton) {
                     skinnedMesh.skeleton.update();
+                    
+                    // Periodically freeze bone texture for emission detachment
+                    if (gpuSkinningEnabled && settings.emissionEnabled) {
+                        if (time - lastBoneFreezeTime > BONE_FREEZE_INTERVAL) {
+                            freezeBoneTexture();
+                            lastBoneFreezeTime = time;
+                        }
+                    }
                     
                     // CPU fallback only if GPU skinning not enabled
                     if (!gpuSkinningEnabled && pointsMesh && particleBaseData.length > 0) {

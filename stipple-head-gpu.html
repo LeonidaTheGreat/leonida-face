@@ -2236,8 +2236,8 @@
                                 // Matches the Effect Start plane reference frame
                                 // Particles drift AWAY from camera (same direction as dissipation)
                                 
-                                // Use REST position for stable coordinates
-                                vec3 restWorldPos = (modelMatrix * vec4(constellationPosition, 1.0)).xyz;
+                                // Use ANIMATED position (basePosition includes GPU skinning)
+                                vec3 animatedWorldPos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
                                 
                                 // Drift direction = away from camera (matches Effect Start reference)
                                 // cameraDir points where camera looks, so particles drift along +cameraDir (away)
@@ -2266,8 +2266,8 @@
                                 float driftProgress = 1.0 - pow(1.0 - lifecycle, 2.0);
                                 float driftDist = driftProgress * emissionDrift * 0.5;
                                 
-                                // Final world position = rest spawn point + world drift
-                                emissionWorldPos = restWorldPos + worldDriftDir * driftDist;
+                                // Final position = animated spawn point + camera-relative drift
+                                emissionWorldPos = animatedWorldPos + worldDriftDir * driftDist;
                                 
                                 // Alpha fade based on lifecycle
                                 float fadeProgress = max(0.0, (lifecycle - emissionFadeStart) / (1.0 - emissionFadeStart + 0.001));

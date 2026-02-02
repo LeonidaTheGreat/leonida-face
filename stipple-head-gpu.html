@@ -2188,18 +2188,13 @@
                             float lifecycle = fract(time * cycleSpeed * speedVariation + phaseOffset / 6.28318);
                             
                             // === WORLD SPACE EMISSION ===
-                            // 1. Get current animated world position (where particle would be if attached)
-                            vec3 attachedWorldPos = (modelMatrix * vec4(basePosition, 1.0)).xyz;
+                            // Use REST POSE position (constellationPosition) to decouple from animation
+                            // This makes emitted particles completely independent of skeleton movement
+                            vec3 restPos = constellationPosition;
                             
-                            // 2. Compute spawn world position using frozenModelMatrix
-                            //    This is where the particle was when it "detached"
-                            vec3 spawnWorldPos = (frozenModelMatrix * vec4(basePosition, 1.0)).xyz;
-                            
-                            // 3. Blend from attached to spawn based on lifecycle and falloff
-                            //    lifecycle=0: at attached position (just spawned from current pose)
-                            //    lifecycle>0: progressively at frozen spawn position
-                            float detachAmount = min(lifecycle * 3.0, 1.0) * falloff; // Quick detach
-                            vec3 currentWorldBase = mix(attachedWorldPos, spawnWorldPos, detachAmount);
+                            // Transform rest position to world space using frozen model matrix
+                            // This gives a stable world position that doesn't change with animation
+                            vec3 currentWorldBase = (frozenModelMatrix * vec4(restPos, 1.0)).xyz;
                             
                             // 4. Compute drift direction in WORLD SPACE
                             vec3 worldRadial = normalize(currentWorldBase);

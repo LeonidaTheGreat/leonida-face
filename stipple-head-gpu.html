@@ -1338,7 +1338,9 @@
             controls.update();
             
             applySettingsToUI();
+            console.time('initParticles');
             initParticles();
+            console.timeEnd('initParticles');
             
             // Apply model-specific Z offset
             const modelOpts = modelSettings[modelName] || { zOffset: 0 };
@@ -1709,7 +1711,9 @@
                 }
             }
             
+            console.time('createMesh');
             createMesh();
+            console.timeEnd('createMesh');
         }
         
         function getFalloffCurveIndex() {

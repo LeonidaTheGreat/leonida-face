@@ -450,6 +450,13 @@
             </select>
         </div>
         
+        <div class="slider-row">
+            <label>
+                <input type="checkbox" id="emissionFrontFacingOnly" checked>
+                Front-Facing Only (hide particles inside model)
+            </label>
+        </div>
+        
         <h3>Legacy Surface Animation</h3>
         
         <div class="slider-row">
@@ -766,6 +773,7 @@
             emissionDensityFalloff: 50, // Particle density falloff from boundary
             emissionDensityFalloffMax: 100, // Max slider value
             emissionDensityFalloffCurve: 'quadratic', // linear, quadratic, cubic, exponential
+            emissionFrontFacingOnly: true, // Only emit particles facing camera (not through model)
             // Legacy surface animation
             surfaceFloat: 3,
             surfaceFloatMin: 0,
@@ -890,6 +898,7 @@
             document.getElementById('emissionDensityFalloff').max = settings.emissionDensityFalloffMax || 100;
             document.getElementById('emissionDensityFalloffMax').value = settings.emissionDensityFalloffMax || 100;
             document.getElementById('emissionDensityFalloffCurve').value = settings.emissionDensityFalloffCurve || 'quadratic';
+            document.getElementById('emissionFrontFacingOnly').checked = settings.emissionFrontFacingOnly !== false;
             
             // Legacy surface animation
             document.getElementById('surfaceFloat').min = settings.surfaceFloatMin;
@@ -1988,6 +1997,7 @@
                     emissionFalloffCurve: { value: ['linear', 'quadratic', 'cubic', 'exponential'].indexOf(settings.emissionFalloffCurve) },
                     emissionDensityFalloff: { value: settings.emissionDensityFalloff / 100 },
                     emissionDensityFalloffCurve: { value: ['linear', 'quadratic', 'cubic', 'exponential'].indexOf(settings.emissionDensityFalloffCurve) },
+                    emissionFrontFacingOnly: { value: settings.emissionFrontFacingOnly ? 1.0 : 0.0 },
                     assemblyProgress: { value: 1.0 }, // 0 = disassembled, 1 = assembled
                     assemblyDirection: { value: settings.assemblyDirection === 'above' ? 1 : settings.assemblyDirection === 'below' ? 2 : 0 },
                     assemblySpread: { value: settings.assemblySpread / 100 },
@@ -2082,6 +2092,7 @@
                     uniform int emissionFalloffCurve;
                     uniform float emissionDensityFalloff;
                     uniform int emissionDensityFalloffCurve;
+                    uniform float emissionFrontFacingOnly;
                     uniform float assemblyProgress;
                     uniform int assemblyDirection;
                     uniform float assemblySpread;
@@ -2487,6 +2498,18 @@
                             // Emit particles in a zone starting at the Effect Start boundary
                             // Thinner zone = sharper boundary definition
                             float boundaryThickness = 0.08; // Reduced from 0.15 for sharper edge
+                            
+                            // Front-facing check: hide particles pointing away from camera
+                            // radialDir points outward from model center
+                            // If dot(radialDir, -cameraDir) < 0, particle faces away from camera
+                            vec3 radialDirLocal = normalize(basePosition);
+                            float facingCamera = dot(radialDirLocal, -cameraDir);
+                            
+                            if (emissionFrontFacingOnly > 0.5 && facingCamera < 0.0) {
+                                // Particle is on back side, pointing away - hide it
+                                emissionAlphaEffect = 0.0;
+                                vEmissionSizeMult = 0.0;
+                            } else
                             
                             if (falloff > boundaryThickness) {
                                 // Too far past boundary - hide this particle
@@ -3316,6 +3339,7 @@
             settings.emissionDensityFalloff = parseFloat(document.getElementById('emissionDensityFalloff').value);
             settings.emissionDensityFalloffMax = parseFloat(document.getElementById('emissionDensityFalloffMax').value);
             settings.emissionDensityFalloffCurve = document.getElementById('emissionDensityFalloffCurve').value;
+            settings.emissionFrontFacingOnly = document.getElementById('emissionFrontFacingOnly').checked;
             // Legacy surface animation
             settings.surfaceFloat = parseFloat(document.getElementById('surfaceFloat').value);
             settings.surfaceFloatMin = parseFloat(document.getElementById('surfaceFloatMin').value);
@@ -3488,6 +3512,14 @@
             if (pointsMesh) {
                 const curveMap = { 'linear': 0, 'quadratic': 1, 'cubic': 2, 'exponential': 3 };
                 pointsMesh.material.uniforms.emissionDensityFalloffCurve.value = curveMap[settings.emissionDensityFalloffCurve];
+            }
+        });
+        
+        // Front-facing only toggle
+        document.getElementById('emissionFrontFacingOnly').addEventListener('change', (e) => {
+            settings.emissionFrontFacingOnly = e.target.checked;
+            if (pointsMesh) {
+                pointsMesh.material.uniforms.emissionFrontFacingOnly.value = settings.emissionFrontFacingOnly ? 1.0 : 0.0;
             }
         });
         

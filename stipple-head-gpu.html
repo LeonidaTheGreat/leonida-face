@@ -2876,7 +2876,11 @@
                 const dir = new THREE.Vector3();
                 camera.getWorldDirection(dir);
                 uniforms.cameraDir.value.copy(dir);
-                uniforms.cameraUp.value.copy(camera.up);
+                
+                // Compute true screen-up: camera's local Y axis in world space
+                const screenUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+                uniforms.cameraUp.value.copy(screenUp);
+                
                 uniforms.cameraPos.value.copy(camera.position);
                 
                 // Update frozen model matrix for world-space dissipation
